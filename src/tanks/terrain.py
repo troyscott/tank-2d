@@ -54,6 +54,23 @@ class Terrain:
             x = len(self.heights) - 1
         return self.heights[x]
 
+    def apply_crater(self, cx: int, cy: float, r: float) -> None:
+        r2 = r * r
+        x_lo = max(0, int(cx - r))
+        x_hi = min(len(self.heights), int(cx + r) + 1)
+        max_y = C.SCREEN_H - 4
+        for x in range(x_lo, x_hi):
+            dx = x - cx
+            d2 = dx * dx
+            if d2 > r2:
+                continue
+            depth = cy + (r2 - d2) ** 0.5
+            new_h = int(depth)
+            if new_h > max_y:
+                new_h = max_y
+            if new_h > self.heights[x]:
+                self.heights[x] = new_h
+
     def render(self, surface: pygame.Surface) -> None:
         w = len(self.heights)
         h = surface.get_height()

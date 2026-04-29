@@ -3,7 +3,7 @@ import math
 import pytest
 
 from tanks import config as C
-from tanks.projectile import Projectile
+from tanks.projectile import Projectile, damage_at
 from tanks.terrain import Terrain
 
 
@@ -89,3 +89,25 @@ def test_off_screen_detects_bottom_and_sides():
     assert p_right.off_screen(C.SCREEN_W, C.SCREEN_H)
     assert p_bottom.off_screen(C.SCREEN_W, C.SCREEN_H)
     assert not p_in.off_screen(C.SCREEN_W, C.SCREEN_H)
+
+
+def test_damage_at_max_at_center():
+    d = damage_at((100, 100), (100, 100), radius=35.0, max_damage=60.0)
+    assert d == pytest.approx(60.0)
+
+
+def test_damage_at_zero_at_or_beyond_radius():
+    assert damage_at((0, 0), (35, 0), radius=35.0, max_damage=60.0) == 0.0
+    assert damage_at((0, 0), (50, 0), radius=35.0, max_damage=60.0) == 0.0
+
+
+def test_damage_at_linear_falloff():
+    # halfway out → half damage
+    d = damage_at((0, 0), (17.5, 0), radius=35.0, max_damage=60.0)
+    assert d == pytest.approx(30.0)
+
+
+def test_damage_at_uses_2d_distance():
+    # 3-4-5 triangle: dist=5, radius=10, frac=0.5, max=60 → 30
+    d = damage_at((0, 0), (3, 4), radius=10.0, max_damage=60.0)
+    assert d == pytest.approx(30.0)

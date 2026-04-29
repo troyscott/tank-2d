@@ -7,6 +7,18 @@ from . import config as C
 from .terrain import Terrain
 
 
+def damage_at(
+    impact: tuple[float, float],
+    target: tuple[float, float],
+    radius: float = C.EXPLOSION_RADIUS,
+    max_damage: float = C.EXPLOSION_DAMAGE,
+) -> float:
+    dist = math.hypot(target[0] - impact[0], target[1] - impact[1])
+    if dist >= radius:
+        return 0.0
+    return max_damage * (1.0 - dist / radius)
+
+
 @dataclass
 class Projectile:
     x: float

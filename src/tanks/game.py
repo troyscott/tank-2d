@@ -3,24 +3,23 @@ import random
 import pygame
 
 from . import config as C
+from .controller import AIController, PlayerController, World
 from .projectile import Projectile, damage_at
 from .tank import Tank
 from .terrain import Terrain
 
-STATE_PLAYING = "playing"
+STATE_PLAYER_TURN = "player_turn"
+STATE_AI_TURN = "ai_turn"
+STATE_FLIGHT = "flight"
 STATE_ROUND_OVER = "round_over"
 
 
-def _clamp(v: float, lo: float, hi: float) -> float:
-    if v < lo:
-        return lo
-    if v > hi:
-        return hi
-    return v
-
-
 class Game:
-    def __init__(self, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        seed: int | None = None,
+        ai_difficulty: str = C.AI_DEFAULT_DIFFICULTY,
+    ) -> None:
         pygame.init()
         pygame.font.init()
         pygame.display.set_caption("Tank Game")
@@ -28,15 +27,48 @@ class Game:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont(None, C.HUD_FONT_SIZE)
         self.big_font = pygame.font.SysFont(None, C.ROUND_OVER_FONT_SIZE)
+
+        self.rng = random.Random(seed)
         self.terrain = Terrain.generate(C.SCREEN_W, seed=seed)
         self.player = Tank(x=C.PLAYER_X, color=C.PLAYER_COLOR, facing=+1)
         self.ai = Tank(x=C.AI_X, color=C.AI_COLOR, facing=-1)
-        for t in (self.player, self.ai):
+        self.tanks: list[Tank] = [self.player, self.ai]
+        for t in self.tanks:
             t.seat(self.terrain)
+
+        self.player_ctrl = PlayerController()
+        self.ai_ctrl = AIController(
+            difficulty=ai_difficulty,
+            rng=random.Random(self.rng.randint(0, 1_000_000)),
+        )
+
+        self.wind = self._roll_wind()
         self.flying: Projectile | None = None
-        self.state = STATE_PLAYING
+        self.current_tank: Tank = self.player
+        self.next_tank: Tank | None = None
+        self.state = STATE_PLAYER_TURN
         self.round_over_msg = ""
+        self._frame_events: list[pygame.event.Event] = []
         self.running = True
+
+        self._controller_for(self.current_tank).begin_turn(
+            self.current_tank, self._world()
+        )
+
+    def _controller_for(self, tank: Tank):
+        return self.player_ctrl if tank is self.player else self.ai_ctrl
+
+    def _world(self) -> World:
+        return World(
+            terrain=self.terrain,
+            wind=self.wind,
+            gravity=C.GRAVITY,
+            tanks=self.tanks,
+        )
+
+    def _roll_wind(self) -> float:
+        lo, hi = C.WIND_RANGE
+        return self.rng.uniform(lo, hi)
 
     def run(self) -> None:
         while self.running:
@@ -47,49 +79,80 @@ class Game:
         pygame.quit()
 
     def _handle_events(self) -> None:
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
-                elif self.state == STATE_PLAYING:
-                    if event.key == pygame.K_SPACE and self.flying is None:
-                        self._fire(self.player)
-                elif self.state == STATE_ROUND_OVER:
-                    if event.key == pygame.K_r:
-                        self._reset_round()
+                elif event.key == pygame.K_r and self.state == STATE_ROUND_OVER:
+                    self._reset_round()
+        self._frame_events = events
 
     def _update(self, dt: float) -> None:
-        if self.state == STATE_ROUND_OVER:
-            return
-        if self.flying is None:
-            self._read_aim_keys(self.player, dt)
-        else:
-            self.flying.update(dt)
+        if self.state in (STATE_PLAYER_TURN, STATE_AI_TURN):
+            ctrl = self._controller_for(self.current_tank)
+            fired = ctrl.tick(
+                self.current_tank, self._world(), dt, self._frame_events
+            )
+            if fired:
+                self._fire(self.current_tank)
+                self.next_tank = self._other(self.current_tank)
+                self.state = STATE_FLIGHT
+        elif self.state == STATE_FLIGHT and self.flying is not None:
+            self.flying.update(dt, gravity=C.GRAVITY, wind=self.wind)
             if self.flying.hit_terrain(self.terrain):
                 self._on_impact(self.flying.x, self.flying.y)
-                self.flying = None
             elif self.flying.off_screen(C.SCREEN_W, C.SCREEN_H):
-                self.flying = None
+                self._end_flight(landing_x=None)
+
+    def _other(self, tank: Tank) -> Tank:
+        return self.ai if tank is self.player else self.player
+
+    def _fire(self, tank: Tank) -> None:
+        tip_x, tip_y = tank.barrel_tip()
+        self.flying = Projectile.fired_from(
+            tip_x, tip_y, tank.angle_deg, tank.power, tank.facing
+        )
 
     def _on_impact(self, x: float, y: float) -> None:
         self.terrain.apply_crater(int(x), y, C.EXPLOSION_RADIUS)
         impact = (x, y)
-        for t in (self.player, self.ai):
+        for t in self.tanks:
             if not t.alive:
                 continue
             dmg = damage_at(impact, t.body_center())
             if dmg > 0:
                 t.take_damage(dmg)
-        for t in (self.player, self.ai):
+        for t in self.tanks:
             t.seat(self.terrain)
         print(
-            f"BOOM at ({int(x)},{int(y)})  "
+            f"BOOM at ({int(x)},{int(y)})  wind={self.wind:+.0f}  "
             f"player_hp={self.player.hp} ai_hp={self.ai.hp}"
         )
         if not self.player.alive or not self.ai.alive:
+            self._end_flight(landing_x=x, dying=True)
             self._enter_round_over()
+            return
+        self._end_flight(landing_x=x)
+
+    def _end_flight(self, landing_x: float | None, dying: bool = False) -> None:
+        self._controller_for(self.current_tank).end_turn(
+            self.current_tank, self._world(), landing_x
+        )
+        self.flying = None
+        if dying:
+            return
+        nxt = self.next_tank or self._other(self.current_tank)
+        self.current_tank = nxt
+        self.next_tank = None
+        self.state = (
+            STATE_PLAYER_TURN if self.current_tank is self.player else STATE_AI_TURN
+        )
+        self._controller_for(self.current_tank).begin_turn(
+            self.current_tank, self._world()
+        )
 
     def _enter_round_over(self) -> None:
         if not self.player.alive and not self.ai.alive:
@@ -101,46 +164,27 @@ class Game:
         self.state = STATE_ROUND_OVER
 
     def _reset_round(self) -> None:
-        self.terrain = Terrain.generate(
-            C.SCREEN_W, seed=random.randint(0, 1_000_000)
-        )
-        for t in (self.player, self.ai):
+        new_seed = self.rng.randint(0, 1_000_000)
+        self.terrain = Terrain.generate(C.SCREEN_W, seed=new_seed)
+        for t in self.tanks:
             t.hp = C.TANK_HP
             t.seat(self.terrain)
+        self.wind = self._roll_wind()
         self.flying = None
-        self.state = STATE_PLAYING
+        self.current_tank = self.player
+        self.next_tank = None
+        self.state = STATE_PLAYER_TURN
         self.round_over_msg = ""
-
-    def _read_aim_keys(self, tank: Tank, dt: float) -> None:
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            tank.angle_deg = _clamp(
-                tank.angle_deg + C.ANGLE_RATE_DEG_PER_SEC * dt, C.ANGLE_MIN, C.ANGLE_MAX
-            )
-        if keys[pygame.K_RIGHT]:
-            tank.angle_deg = _clamp(
-                tank.angle_deg - C.ANGLE_RATE_DEG_PER_SEC * dt, C.ANGLE_MIN, C.ANGLE_MAX
-            )
-        if keys[pygame.K_UP]:
-            tank.power = _clamp(
-                tank.power + C.POWER_RATE_PER_SEC * dt, C.POWER_MIN, C.POWER_MAX
-            )
-        if keys[pygame.K_DOWN]:
-            tank.power = _clamp(
-                tank.power - C.POWER_RATE_PER_SEC * dt, C.POWER_MIN, C.POWER_MAX
-            )
-
-    def _fire(self, tank: Tank) -> None:
-        tip_x, tip_y = tank.barrel_tip()
-        self.flying = Projectile.fired_from(
-            tip_x, tip_y, tank.angle_deg, tank.power, tank.facing
+        self.ai_ctrl.last_offset_x = 0.0
+        self._controller_for(self.current_tank).begin_turn(
+            self.current_tank, self._world()
         )
 
     def _render(self) -> None:
         self.screen.fill(C.SKY_COLOR)
         self.terrain.render(self.screen)
-        self.player.render(self.screen)
-        self.ai.render(self.screen)
+        for t in self.tanks:
+            t.render(self.screen)
         if self.flying is not None:
             self.flying.render(self.screen)
         self._render_hud()
@@ -149,17 +193,40 @@ class Game:
         pygame.display.flip()
 
     def _render_hud(self) -> None:
-        if self.state == STATE_ROUND_OVER:
-            return
-        status = "FIRING" if self.flying is not None else "READY"
-        line = (
-            f"ANGLE {self.player.angle_deg:5.1f}    "
-            f"POWER {self.player.power:5.0f}    "
-            f"{status}"
-        )
-        color = C.HUD_DIM_COLOR if self.flying is not None else C.HUD_COLOR
-        surf = self.font.render(line, True, color)
-        self.screen.blit(surf, (10, 8))
+        if self.state == STATE_PLAYER_TURN:
+            left = (
+                f"YOU   ANGLE {self.player.angle_deg:5.1f}   "
+                f"POWER {self.player.power:5.0f}"
+            )
+            color = C.HUD_COLOR
+        elif self.state == STATE_AI_TURN:
+            left = "AI THINKING..."
+            color = C.HUD_DIM_COLOR
+        elif self.state == STATE_FLIGHT:
+            who = "YOU" if self.current_tank is self.player else "AI"
+            left = f"{who} fired"
+            color = C.HUD_DIM_COLOR
+        else:
+            left = ""
+            color = C.HUD_COLOR
+        if left:
+            surf = self.font.render(left, True, color)
+            self.screen.blit(surf, (10, 8))
+        wind_str = self._wind_string()
+        wind_surf = self.font.render(wind_str, True, C.HUD_COLOR)
+        wind_rect = wind_surf.get_rect()
+        wind_rect.topright = (C.SCREEN_W - 10, 8)
+        self.screen.blit(wind_surf, wind_rect)
+
+    def _wind_string(self) -> str:
+        mag = abs(self.wind)
+        if mag < 1.0:
+            return "WIND --- 0"
+        arrow = ">" if self.wind > 0 else "<"
+        bars = arrow * max(1, min(5, int(mag / 10) + 1))
+        if self.wind > 0:
+            return f"WIND {bars} {self.wind:+.0f}"
+        return f"WIND {bars} {self.wind:+.0f}"
 
     def _render_round_over(self) -> None:
         msg = f"ROUND OVER — {self.round_over_msg}"

@@ -57,10 +57,13 @@ class Game:
         pygame.display.set_caption("Tank Game")
         self.screen = pygame.display.set_mode((C.SCREEN_W, C.SCREEN_H))
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont(None, C.HUD_FONT_SIZE)
-        self.big_font = pygame.font.SysFont(None, C.ROUND_OVER_FONT_SIZE)
-        self.title_font = pygame.font.SysFont(None, C.MENU_TITLE_FONT_SIZE)
-        self.menu_font = pygame.font.SysFont(None, C.MENU_LINE_FONT_SIZE)
+        # pygame.font.Font(None, ...) uses pygame's bundled default font and
+        # works the same on native + pygbag/browser. SysFont triggers a system
+        # font lookup that hangs in WebAssembly.
+        self.font = pygame.font.Font(None, C.HUD_FONT_SIZE)
+        self.big_font = pygame.font.Font(None, C.ROUND_OVER_FONT_SIZE)
+        self.title_font = pygame.font.Font(None, C.MENU_TITLE_FONT_SIZE)
+        self.menu_font = pygame.font.Font(None, C.MENU_LINE_FONT_SIZE)
 
         self.audio = AudioSystem()
 

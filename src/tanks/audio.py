@@ -93,26 +93,37 @@ _SYNTHS: dict[str, callable] = {
 class AudioSystem:
     """Holds procedurally synthesized sounds and a mixer channel pool.
 
-    Safe to construct even when no audio device is available — `play` becomes
-    a no-op and nothing crashes.
+    Numpy synthesis runs eagerly (no mixer needed). pygame `Sound` creation is
+    deferred until the first successful mixer init — this matters in the
+    browser, where the audio context only comes alive after a user gesture
+    (key press / click). Once mixer init succeeds, all sounds are built and
+    `play` works for the rest of the session.
     """
 
     def __init__(self) -> None:
         self.enabled = False
+        self._raw: dict[str, np.ndarray] = {
+            name: _to_stereo_int16(synth()) for name, synth in _SYNTHS.items()
+        }
         self.sounds: dict[str, pygame.mixer.Sound] = {}
+        self._try_init()
+
+    def _try_init(self) -> bool:
+        if self.enabled:
+            return True
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init(C.AUDIO_SAMPLE_RATE, -16, 2, C.AUDIO_BUFFER)
             pygame.mixer.set_num_channels(8)
-            for name, synth in _SYNTHS.items():
-                samples = _to_stereo_int16(synth())
+            for name, samples in self._raw.items():
                 self.sounds[name] = pygame.sndarray.make_sound(samples)
             self.enabled = True
+            return True
         except (pygame.error, Exception):
-            self.enabled = False
+            return False
 
     def play(self, name: str) -> None:
-        if not self.enabled:
+        if not self.enabled and not self._try_init():
             return
         snd = self.sounds.get(name)
         if snd is not None:

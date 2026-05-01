@@ -1,3 +1,4 @@
+import asyncio
 import random
 
 import pygame
@@ -110,12 +111,15 @@ class Game:
         lo, hi = C.WIND_RANGE
         return self.rng.uniform(lo, hi)
 
-    def run(self) -> None:
+    async def run(self) -> None:
         while self.running:
             dt = self.clock.tick(C.FPS) / 1000.0
             self._handle_events()
             self._update(dt)
             self._render()
+            # Yield to the event loop so pygbag (browser/WebAssembly) can
+            # render a frame; harmless under native asyncio.
+            await asyncio.sleep(0)
         pygame.quit()
 
     def _handle_events(self) -> None:

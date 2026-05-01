@@ -30,6 +30,19 @@ micromamba create -p ./.venv -c conda-forge -y python=3.13 pygame numpy pytest
 .venv/bin/pytest tests/ -q
 ```
 
+## Browser build (itch.io / GitHub Pages)
+
+The game can be compiled to WebAssembly with [pygbag](https://pypi.org/project/pygbag/) so it runs in a browser tab.
+
+```sh
+.venv/bin/pip install pygbag
+.venv/bin/python -m pygbag --build --width 1024 --height 640 --title "Tank Game" main.py
+```
+
+The static bundle lands in `build/web/` (~60 KB plus the standard pygbag runtime, fetched from CDN at first load). For a local browser test, drop `--build` and visit the URL pygbag prints. To publish on **itch.io**, zip `build/web/`, create a new project marked "HTML", and upload the zip with "This file will be played in the browser" checked.
+
+`pygbag.ini` excludes `.venv`, `tests`, `docs`, and other dev directories from the bundle so only the source is shipped.
+
 51 tests cover terrain generation + craters, projectile physics, damage falloff, AI solver convergence, match-flow logic, and audio synthesis.
 
 ## Design

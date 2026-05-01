@@ -36,6 +36,15 @@ ANGLE_MAX = 180.0
 AI_TURN_DELAY = 0.8  # seconds AI takes between turn-start and firing
 AI_DEFAULT_DIFFICULTY = "medium"
 
+ROUNDS_TO_WIN = 3  # best-of-5: first player to 3 round wins takes the match
+
+AUDIO_SAMPLE_RATE = 22050
+AUDIO_BUFFER = 512
+AIM_TICK_INTERVAL = 0.08  # seconds between successive aim "tick" sounds
+
+MENU_TITLE_FONT_SIZE = 56
+MENU_LINE_FONT_SIZE = 26
+
 ANGLE_RATE_DEG_PER_SEC = 60.0
 POWER_RATE_PER_SEC = 300.0
 

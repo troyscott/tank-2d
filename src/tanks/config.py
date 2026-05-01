@@ -26,11 +26,15 @@ TANK_BARREL_W = 4
 DEFAULT_ANGLE_DEG = 60.0
 
 GRAVITY = 400.0
+WIND_RANGE = (-50.0, 50.0)  # px/s² horizontal, randomized per round
 POWER_MIN = 100.0
 POWER_MAX = 800.0
 DEFAULT_POWER = 400.0
 ANGLE_MIN = 0.0
 ANGLE_MAX = 180.0
+
+AI_TURN_DELAY = 0.8  # seconds AI takes between turn-start and firing
+AI_DEFAULT_DIFFICULTY = "medium"
 
 ANGLE_RATE_DEG_PER_SEC = 60.0
 POWER_RATE_PER_SEC = 300.0

@@ -19,6 +19,7 @@ class World:
     wind: float
     gravity: float
     tanks: list["Tank"]
+    audio: object | None = None  # AudioSystem; left as `object` to avoid a cycle
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -51,24 +52,42 @@ class Controller(ABC):
 
 
 class PlayerController(Controller):
+    def __init__(self) -> None:
+        self._tick_timer = 0.0
+
     def tick(self, tank, world, dt, events):
         keys = pygame.key.get_pressed()
+        adjusting = False
         if keys[pygame.K_LEFT]:
             tank.angle_deg = _clamp(
                 tank.angle_deg + C.ANGLE_RATE_DEG_PER_SEC * dt, C.ANGLE_MIN, C.ANGLE_MAX
             )
+            adjusting = True
         if keys[pygame.K_RIGHT]:
             tank.angle_deg = _clamp(
                 tank.angle_deg - C.ANGLE_RATE_DEG_PER_SEC * dt, C.ANGLE_MIN, C.ANGLE_MAX
             )
+            adjusting = True
         if keys[pygame.K_UP]:
             tank.power = _clamp(
                 tank.power + C.POWER_RATE_PER_SEC * dt, C.POWER_MIN, C.POWER_MAX
             )
+            adjusting = True
         if keys[pygame.K_DOWN]:
             tank.power = _clamp(
                 tank.power - C.POWER_RATE_PER_SEC * dt, C.POWER_MIN, C.POWER_MAX
             )
+            adjusting = True
+
+        if adjusting:
+            self._tick_timer -= dt
+            if self._tick_timer <= 0.0:
+                if world.audio is not None:
+                    world.audio.play("tick")
+                self._tick_timer = C.AIM_TICK_INTERVAL
+        else:
+            self._tick_timer = 0.0
+
         for ev in events:
             if ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
                 return True

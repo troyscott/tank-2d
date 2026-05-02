@@ -5,3 +5,7 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .claude/settings.local.json
+build/
+dist/
+.env
+.env.*

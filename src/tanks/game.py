@@ -1,3 +1,4 @@
+import asyncio
 import random
 
 import pygame
@@ -13,6 +14,7 @@ STATE_MENU = "menu"
 STATE_PLAYER_TURN = "player_turn"
 STATE_AI_TURN = "ai_turn"
 STATE_FLIGHT = "flight"
+STATE_IMPACT = "impact"
 STATE_ROUND_OVER = "round_over"
 STATE_MATCH_END = "match_end"
 
@@ -21,6 +23,13 @@ DIFFICULTY_KEYS = {
     pygame.K_2: "medium",
     pygame.K_3: "hard",
 }
+
+
+class _NullAudio:
+    enabled = False
+
+    def play(self, name: str) -> None:
+        return
 
 
 def round_outcome(player_alive: bool, ai_alive: bool) -> tuple[str, int, int]:
@@ -44,24 +53,24 @@ class Game:
         seed: int | None = None,
         ai_difficulty: str = C.AI_DEFAULT_DIFFICULTY,
         skip_menu: bool = False,
+        enable_audio: bool = True,
     ) -> None:
-        # Pre-init mixer with desired buffer/rate before pygame.init() so the
-        # mixer comes up at our chosen settings (or no-ops on dummy audio).
-        try:
-            pygame.mixer.pre_init(C.AUDIO_SAMPLE_RATE, -16, 2, C.AUDIO_BUFFER)
-        except pygame.error:
-            pass
-        pygame.init()
+        # Initialize only the pygame modules we need. pygame.init() also fires
+        # mixer.init() which blocks indefinitely on the browser AudioContext.
+        pygame.display.init()
         pygame.font.init()
         pygame.display.set_caption("Tank Game")
         self.screen = pygame.display.set_mode((C.SCREEN_W, C.SCREEN_H))
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont(None, C.HUD_FONT_SIZE)
-        self.big_font = pygame.font.SysFont(None, C.ROUND_OVER_FONT_SIZE)
-        self.title_font = pygame.font.SysFont(None, C.MENU_TITLE_FONT_SIZE)
-        self.menu_font = pygame.font.SysFont(None, C.MENU_LINE_FONT_SIZE)
+        # Font(None, ...) uses pygame's bundled default font and works the
+        # same on native + pygbag/browser. SysFont triggers a system font
+        # lookup that hangs in WebAssembly.
+        self.font = pygame.font.Font(None, C.HUD_FONT_SIZE)
+        self.big_font = pygame.font.Font(None, C.ROUND_OVER_FONT_SIZE)
+        self.title_font = pygame.font.Font(None, C.MENU_TITLE_FONT_SIZE)
+        self.menu_font = pygame.font.Font(None, C.MENU_LINE_FONT_SIZE)
 
-        self.audio = AudioSystem()
+        self.audio = AudioSystem() if enable_audio else _NullAudio()
 
         self.rng = random.Random(seed)
         self.terrain = Terrain.generate(C.SCREEN_W, seed=seed)
@@ -87,6 +96,13 @@ class Game:
         self.round_over_msg = ""
         self.match_over_msg = ""
         self._frame_events: list[pygame.event.Event] = []
+        # After a projectile lands, we hold STATE_IMPACT for a beat so the
+        # bang and the crater have time to register before the next turn
+        # starts. These remember what _end_flight needs to do once the timer
+        # expires.
+        self._impact_timer = 0.0
+        self._impact_landing_x: float | None = None
+        self._impact_dying = False
         self.running = True
 
         if skip_menu:
@@ -110,12 +126,15 @@ class Game:
         lo, hi = C.WIND_RANGE
         return self.rng.uniform(lo, hi)
 
-    def run(self) -> None:
+    async def run(self) -> None:
         while self.running:
             dt = self.clock.tick(C.FPS) / 1000.0
             self._handle_events()
             self._update(dt)
             self._render()
+            # Yield to the event loop so pygbag (browser/WebAssembly) can
+            # render a frame; harmless under native asyncio.
+            await asyncio.sleep(0)
         pygame.quit()
 
     def _handle_events(self) -> None:
@@ -150,7 +169,22 @@ class Game:
             if self.flying.hit_terrain(self.terrain):
                 self._on_impact(self.flying.x, self.flying.y)
             elif self.flying.off_screen(C.SCREEN_W, C.SCREEN_H):
+                # Off-screen miss: no impact sound, no settle period — just
+                # hand the turn over.
                 self._end_flight(landing_x=None)
+        elif self.state == STATE_IMPACT:
+            self._impact_timer -= dt
+            if self._impact_timer <= 0.0:
+                # Settle's done — either roll into the round-over screen (if
+                # someone died) or hand the turn over.
+                if self._impact_dying:
+                    self._controller_for(self.current_tank).end_turn(
+                        self.current_tank, self._world(), self._impact_landing_x
+                    )
+                    self.flying = None
+                    self._enter_round_over()
+                else:
+                    self._end_flight(landing_x=self._impact_landing_x)
 
     def _other(self, tank: Tank) -> Tank:
         return self.ai if tank is self.player else self.player
@@ -160,7 +194,8 @@ class Game:
         self.flying = Projectile.fired_from(
             tip_x, tip_y, tank.angle_deg, tank.power, tank.facing
         )
-        self.audio.play("fire")
+        # No fire sound — the only audio in the game is the projectile
+        # landing. The visual of the shell leaving the barrel is the cue.
 
     def _on_impact(self, x: float, y: float) -> None:
         self.terrain.apply_crater(int(x), y, C.EXPLOSION_RADIUS)
@@ -175,18 +210,21 @@ class Game:
                 any_hit = True
         for t in self.tanks:
             t.seat(self.terrain)
-        self.audio.play("explosion")
-        if any_hit:
-            self.audio.play("hit")
+        # One impact sound for any landing. The HP-bar drop is the visual cue
+        # that a tank took damage — separate hit/explosion audio was redundant.
+        self.audio.play("impact")
         print(
             f"BOOM at ({int(x)},{int(y)})  wind={self.wind:+.0f}  "
             f"player_hp={self.player.hp} ai_hp={self.ai.hp}"
         )
-        if not self.player.alive or not self.ai.alive:
-            self._end_flight(landing_x=x, dying=True)
-            self._enter_round_over()
-            return
-        self._end_flight(landing_x=x)
+
+        # Hold STATE_IMPACT briefly so the bang and the crater register before
+        # the next turn (or the round-over screen) appears. _update finishes
+        # the bookkeeping when the timer expires.
+        self._impact_landing_x = x
+        self._impact_dying = (not self.player.alive) or (not self.ai.alive)
+        self._impact_timer = C.IMPACT_SETTLE_DURATION
+        self.state = STATE_IMPACT
 
     def _end_flight(self, landing_x: float | None, dying: bool = False) -> None:
         self._controller_for(self.current_tank).end_turn(
@@ -210,8 +248,6 @@ class Game:
         self.round_over_msg = msg
         self.player_score += p_delta
         self.ai_score += ai_delta
-        if p_delta > 0:
-            self.audio.play("round_win")
         if is_match_over(self.player_score, self.ai_score):
             self.match_over_msg = (
                 "YOU WIN THE MATCH"
@@ -219,8 +255,6 @@ class Game:
                 else "AI WINS THE MATCH"
             )
             self.state = STATE_MATCH_END
-            if self.player_score > self.ai_score:
-                self.audio.play("round_win")
         else:
             self.state = STATE_ROUND_OVER
 

@@ -125,23 +125,22 @@ If no solution (out of range), pick max range angle and let the player escape.
 
 ## 7. Audio
 
-`pygame.mixer` with 8-channel pool. **One pre-recorded CC0 OGG file**, loaded from `src/tanks/sounds/impact.ogg` and played via `pygame.mixer.Sound`.
+**The game ships silent.** All player feedback is visual:
 
-One sound:
-- `impact` — single bang, ~0.9 s. Played on every projectile landing, regardless of dirt/tank. The HP-bar drop is the visual cue for damage.
+| event | visual cue |
+|---|---|
+| Tank fires | barrel kicks; projectile dot moves up the screen |
+| Projectile in flight | dot tracing an arc |
+| Projectile lands | crater carved into the heightmap |
+| Tank takes damage | HP bar drops; gray-out at zero HP |
+| AI's turn | "AI THINKING…" + score in HUD; barrel rotates to telegraph the shot |
+| Round / match end | overlay text + score |
 
-The audio palette is intentionally minimal. Earlier drafts called for synthesized SFX (`fire`, `explosion`, `hit`, `tick`, `round_win`); each cut made the system simpler without losing feedback that the HUD doesn't already provide:
+Earlier drafts iterated through procedural synth → file-based OGG SFX, both of which produced timing/character issues that persisted across many attempts (rate mismatch with `pygame.mixer.init`, layered synths fragmenting under SDL resampling, OS-level audio latency). After ~a day of audio debugging, removing audio entirely produced a tighter, more honest deliverable: every piece of information audio was meant to convey is already present visually, so silence loses atmosphere but not feedback.
 
-- **No firing sound.** The visual of the projectile leaving the barrel is the cue.
-- **No tank-hit-vs-dirt distinction.** The HP bar tells the player whether they damaged anything.
-- **No round/match-win arpeggio.** The "ROUND OVER" / "YOU WIN THE MATCH" overlay is the cue.
-- **No tick on aim adjust.** It was clutter during a state where the player has direct control of the HUD.
+The lessons from the audio iteration are kept in `docs/browser-build.md` (pygame.mixer browser/init gotchas) and the cross-project `itch-indie-game` skill — they remain useful for any future pygame project that *does* want SFX.
 
-The synth approach in earlier drafts (numpy + `pygame.sndarray`) was abandoned after extensive debugging: pygame doesn't resample, so synth at the wrong sample rate produced artifacts; layered synths fragmented into multiple perceived events when SDL resampled them. OGG files dodge all of that.
-
-**Source:** "25 CC0 bang/firework SFX" pack on OpenGameArt (CC0, public domain), `bang_02`. See `src/tanks/sounds/CREDITS.txt`.
-
-**Browser caveat:** `pygame.mixer.init()` can block on the locked AudioContext in pygbag — see `docs/browser-build.md` for the deferred-init pattern in `AudioSystem._try_init`.
+A `STATE_IMPACT` settle phase (`config.IMPACT_SETTLE_DURATION = 0.55s`) holds the screen between projectile landing and the next turn so the crater registers visually before "AI THINKING…" appears. This was originally added to give the audio room; with audio removed, it still earns its keep as a visual pacing beat.
 
 ---
 

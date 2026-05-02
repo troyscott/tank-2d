@@ -1,6 +1,6 @@
 # tank
 
-A 2D side-view turn-based artillery duel in Python + pygame. One human vs. one AI, best-of-five, destructible terrain, per-round wind, three difficulty levels, all SFX procedurally generated at startup (no audio assets).
+A 2D side-view turn-based artillery duel in Python + pygame. One human vs. one AI, best-of-five, destructible terrain, per-round wind, three difficulty levels. The game ships silent — all feedback is visual; see `specs/SPEC.md` § 7 for the rationale.
 
 ![screenshot](docs/screenshot.png)
 

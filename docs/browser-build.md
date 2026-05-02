@@ -41,6 +41,25 @@ pygbag/pyodide installs wheels asynchronously after the page loads. If our code 
   ```
 - Lazy-import numpy *inside* the synth functions rather than at module top — see `src/tanks/audio.py`. So merely importing the audio module never requires numpy; only running a synth does.
 
+### 4b. PEP 723 isn't enough — numpy install completes *after* main.py starts running
+This was the sneakier follow-up to #4. Even with the dependency declared and `import numpy` deferred to inside synth functions, the installation can finish *slightly after* `main.py` begins executing. Concretely: pygbag fetches the numpy wheel during page load, but the `micropip.install()` call to actually unpack and register it is async; on a fast machine, Python execution races ahead. AudioSystem's lazy `_np()` call then hits `ModuleNotFoundError` and (without a try/except) the screen stays grey forever. Locally with numpy in the venv it works fine; only the browser exposes it.
+
+**Symptoms:** game works locally, "stops working" when deployed to itch even though earlier deploys with the same code worked. The difference is usually that the working deploy had an incidental delay (e.g. on-canvas debug paint + sleep) that gave numpy time to install.
+
+**Fix:** poll `import numpy` for ~3 seconds at the top of `main()` before importing anything that touches it. On native this is a single instant import; on browser it provides a deterministic wait. See `main.py:_wait_for_numpy`.
+
+```python
+async def _wait_for_numpy(max_attempts=30, delay=0.1):
+    for _ in range(max_attempts):
+        try:
+            import numpy  # noqa: F401
+            return
+        except ModuleNotFoundError:
+            await asyncio.sleep(delay)
+```
+
+**Always pair with a try/except in `main()`** that paints uncaught exceptions onto the canvas. Without it, *any* future timing or import error becomes a silent grey screen, since browsers don't surface Python stdout (see #7).
+
 ### 5. pygbag bundles `.venv` (and any other dot-dirs) into the apk by default
 Without an explicit ignore list pygbag walks the project root and pulls in everything, producing a 200+ MB apk that contains your virtualenv. The default ignore patterns in pygbag's filter (`/.git`, `/build`, `/venv`, …) all start with a leading slash because the walk yields paths prefixed with `/`. Patterns *without* a leading slash silently don't match.
 

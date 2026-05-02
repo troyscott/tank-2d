@@ -1,3 +1,6 @@
+# /// script
+# dependencies = ["numpy"]
+# ///
 import asyncio
 import sys
 from pathlib import Path

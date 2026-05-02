@@ -43,6 +43,8 @@ The static bundle lands in `build/web/` (~60 KB plus the standard pygbag runtime
 
 `pygbag.ini` excludes `.venv`, `tests`, `docs`, and other dev directories from the bundle so only the source is shipped.
 
+If the browser build misbehaves (grey/red screen, audio missing, stuck on load), see [`docs/browser-build.md`](docs/browser-build.md) for the gotchas we hit and how each one is worked around.
+
 51 tests cover terrain generation + craters, projectile physics, damage falloff, AI solver convergence, match-flow logic, and audio synthesis.
 
 ## Design

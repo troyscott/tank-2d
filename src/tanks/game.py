@@ -24,6 +24,13 @@ DIFFICULTY_KEYS = {
 }
 
 
+class _NullAudio:
+    enabled = False
+
+    def play(self, name: str) -> None:
+        return
+
+
 def round_outcome(player_alive: bool, ai_alive: bool) -> tuple[str, int, int]:
     """Decide round outcome from final HP states. Returns (msg, p_delta, ai_delta)."""
     if not player_alive and not ai_alive:
@@ -45,27 +52,24 @@ class Game:
         seed: int | None = None,
         ai_difficulty: str = C.AI_DEFAULT_DIFFICULTY,
         skip_menu: bool = False,
+        enable_audio: bool = True,
     ) -> None:
-        # Pre-init mixer with desired buffer/rate before pygame.init() so the
-        # mixer comes up at our chosen settings (or no-ops on dummy audio).
-        try:
-            pygame.mixer.pre_init(C.AUDIO_SAMPLE_RATE, -16, 2, C.AUDIO_BUFFER)
-        except pygame.error:
-            pass
-        pygame.init()
+        # Initialize only the pygame modules we need. pygame.init() also fires
+        # mixer.init() which blocks indefinitely on the browser AudioContext.
+        pygame.display.init()
         pygame.font.init()
         pygame.display.set_caption("Tank Game")
         self.screen = pygame.display.set_mode((C.SCREEN_W, C.SCREEN_H))
         self.clock = pygame.time.Clock()
-        # pygame.font.Font(None, ...) uses pygame's bundled default font and
-        # works the same on native + pygbag/browser. SysFont triggers a system
-        # font lookup that hangs in WebAssembly.
+        # Font(None, ...) uses pygame's bundled default font and works the
+        # same on native + pygbag/browser. SysFont triggers a system font
+        # lookup that hangs in WebAssembly.
         self.font = pygame.font.Font(None, C.HUD_FONT_SIZE)
         self.big_font = pygame.font.Font(None, C.ROUND_OVER_FONT_SIZE)
         self.title_font = pygame.font.Font(None, C.MENU_TITLE_FONT_SIZE)
         self.menu_font = pygame.font.Font(None, C.MENU_LINE_FONT_SIZE)
 
-        self.audio = AudioSystem()
+        self.audio = AudioSystem() if enable_audio else _NullAudio()
 
         self.rng = random.Random(seed)
         self.terrain = Terrain.generate(C.SCREEN_W, seed=seed)

@@ -11,7 +11,7 @@
 #   scripts/deploy-itch.sh v0.1.1
 #
 # Optional env overrides:
-#   ITCH_PROJECT (default: troyscott/tank-2d)
+#   ITCH_PROJECT (default: fableworks/tank-2d)
 #   ITCH_CHANNEL (default: html5)
 #   PYTHON       (default: .venv/bin/python)
 
@@ -38,7 +38,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 PYTHON="${PYTHON:-.venv/bin/python}"
-PROJECT="${ITCH_PROJECT:-troyscott/tank-2d}"
+PROJECT="${ITCH_PROJECT:-fableworks/tank-2d}"
 CHANNEL="${ITCH_CHANNEL:-html5}"
 
 if [[ ! -x "$PYTHON" ]]; then

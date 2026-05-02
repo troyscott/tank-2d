@@ -17,7 +17,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      ITCH_PROJECT: troyscott/tank-2d
+      ITCH_PROJECT: fableworks/tank-2d
       ITCH_CHANNEL: html5
     steps:
       - uses: actions/checkout@v4

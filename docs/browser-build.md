@@ -27,7 +27,12 @@ For a local dev test, drop `--build` and visit the URL pygbag prints (default `h
 ### 3. `pygame.mixer.init()` and `Sound` creation block until first user gesture
 Even when called on its own, mixer init blocks on the locked AudioContext. The first user keypress / click unlocks it.
 
-**Fix:** in `AudioSystem.__init__` we synthesize the audio buffers (numpy only — no mixer) but do **not** initialize the mixer or build `pygame.mixer.Sound` objects. Both are deferred to the first `play()` call, which only happens after a user gesture by definition (firing a shot, navigating the menu, etc.). `play()` retries `_try_init` each call until it succeeds.
+**Fix:** in `AudioSystem.__init__` we don't initialize the mixer or build `pygame.mixer.Sound` objects — those are deferred to the first `play()` call, which only happens after a user gesture by definition (firing a shot, navigating the menu, etc.). `play()` retries `_try_init` each call until it succeeds.
+
+### 3b. Pygame doesn't resample — `mixer.init(rate=...)` is a request, not a guarantee
+On macOS native and many other platforms, `pygame.mixer.init(22050, -16, 2, ...)` silently comes up at the system's native rate (44100). If you synthesize at 22050 and the mixer plays at 44100, sounds play at 2× speed an octave higher *and* SDL's interpolation introduces sub-sample timing jitter between any layered components — which fragments single `play()` calls into multiple perceived events. Symptoms include "tank hits sound like 2-3 events even though we only called `play('hit')` once" — which we mis-diagnosed as a synth-design issue for several iterations before checking the actual rate.
+
+**Fix:** synthesize at `pygame.mixer.get_init()[0]` (the actual rate the mixer came up at), not at the rate you requested. See `_synth_*(sr)` in `src/tanks/audio.py` and `AudioSystem._try_init` for the pattern: pass the actual rate into the synth functions and only build the buffers + Sound objects after init succeeds.
 
 ### 4. `import numpy` fails immediately at module load
 pygbag/pyodide installs wheels asynchronously after the page loads. If our code does `import numpy as np` at module top, it can run before pyodide finishes installing numpy and we hit `ModuleNotFoundError`.

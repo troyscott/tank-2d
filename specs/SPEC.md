@@ -125,12 +125,18 @@ If no solution (out of range), pick max range angle and let the player escape.
 
 ## 7. Audio
 
-`pygame.mixer` with 8-channel pool. SFX are procedurally generated at startup using `numpy` + `pygame.sndarray` — no asset files. Sounds:
-- `fire.wav` — short noise burst, descending pitch
-- `explosion.wav` — noise burst with low-pass envelope
-- `hit.wav` — sharper attack
-- `tick.wav` — angle/power adjustment feedback
-- `round_win.wav` — ascending arpeggio
+`pygame.mixer` with 8-channel pool. SFX are procedurally generated at startup using `numpy` + `pygame.sndarray` — no asset files. Synthesis is intentionally simple — single-component waveforms with a single envelope per sound — because layered synths read as multiple events when actually played, even when only one `play()` call fires.
+
+Three sounds:
+- `fire` — descending sine sweep (180→60 Hz), exponential decay; ~150 ms.
+- `explosion` — bright noise burst (light low-pass), fast decay; ~150 ms. Played when a projectile lands in dirt with no tank in the blast radius.
+- `hit` — darker noise burst (heavier low-pass than `explosion`), single envelope, slightly louder; ~180 ms. Distinct from `explosion` by tone (darker / heavier), not by layering. Played when a projectile damages a tank. *Layered versions with a metallic ring on top sounded like multiple events for a single impact — kept it single-component on purpose.*
+
+The `explosion` and `hit` events are mutually exclusive — exactly one impact sound per impact, chosen by whether any tank took damage. (Earlier versions layered `explosion` + `hit` on tank hits, which sounded like a doubled blast.)
+
+**Cut from earlier drafts:** `tick` (aim feedback) was noise during a state where the player is already getting visual feedback from the HUD; `round_win` (arpeggio) duplicated the on-screen "ROUND OVER" overlay. Both removed.
+
+**Browser caveat:** `pygame.mixer.init()` can block on the locked AudioContext in pygbag — see `docs/browser-build.md` for the deferred-init pattern in `AudioSystem._try_init`.
 
 ---
 

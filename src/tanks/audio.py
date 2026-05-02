@@ -1,16 +1,19 @@
 """Procedurally synthesized SFX.
 
-numpy is imported lazily because pygbag/pyodide installs wheels asynchronously
-and may not have numpy ready when this module is first imported. Deferring
-means the requirement only kicks in when a synth actually runs (i.e. when
-AudioSystem is constructed). Browser bring-up with `enable_audio=False`
-therefore never touches numpy.
+Sample rate is determined at init time by what `pygame.mixer.get_init()`
+actually reports, NOT what we requested — pygame doesn't resample, and on
+many platforms the mixer ignores the rate argument and comes up at its native
+rate (typically 44100). Synthesizing at the wrong rate plays sounds at the
+wrong speed and pitch, which can sound like multiple events for a single
+play call.
+
+Synth functions take `sr` as a parameter and are only invoked after the
+mixer is up. numpy is imported lazily so module import doesn't require it
+(pygbag/pyodide installs wheels asynchronously).
 """
 import pygame
 
 from . import config as C
-
-SR = C.AUDIO_SAMPLE_RATE
 
 
 def _np():
@@ -26,107 +29,64 @@ def _to_stereo_int16(mono_float):
     return np.ascontiguousarray(stereo)
 
 
-def _synth_fire():
+def _synth_fire(sr: int):
+    """Tank firing — single bass thump, pure sine sweep."""
     np = _np()
-    duration = 0.18
-    n = int(SR * duration)
+    duration = 0.15
+    n = int(sr * duration)
     t = np.linspace(0.0, duration, n, endpoint=False)
-    pitch = np.linspace(160.0, 55.0, n)
-    phase = 2 * np.pi * np.cumsum(pitch) / SR
-    tone = np.sin(phase)
-    rng = np.random.default_rng(1)
-    noise = rng.uniform(-1.0, 1.0, n) * 0.45
-    env = np.exp(-t * 11.0)
-    return (tone * 0.55 + noise) * env * 0.75
+    pitch = np.linspace(180.0, 60.0, n)
+    phase = 2 * np.pi * np.cumsum(pitch) / sr
+    return np.sin(phase) * np.exp(-t * 12.0) * 0.7
 
 
-def _synth_explosion():
+def _synth_explosion(sr: int):
+    """Projectile in dirt — short, bright noise burst."""
     np = _np()
-    duration = 0.45
-    n = int(SR * duration)
+    duration = 0.15
+    n = int(sr * duration)
     t = np.linspace(0.0, duration, n, endpoint=False)
     rng = np.random.default_rng(2)
     noise = rng.uniform(-1.0, 1.0, n)
-    # crude low-pass via running mean
-    k = 9
-    noise = np.convolve(noise, np.ones(k) / k, mode="same")
-    rumble = np.sin(2 * np.pi * 75.0 * t) * 0.35
-    attack = np.minimum(t / 0.015, 1.0)
-    decay = np.exp(-t * 4.0)
-    env = attack * decay
-    return (noise * 0.85 + rumble) * env * 0.95
+    body = np.convolve(noise, np.ones(5) / 5, mode="same")
+    env = np.minimum(t / 0.002, 1.0) * np.exp(-t * 16.0)
+    return body * env * 0.75
 
 
-def _synth_hit():
+def _synth_hit(sr: int):
+    """Projectile on tank — single deep thud. Same shape as `explosion`,
+    just darker (heavier low-pass) and slightly longer/louder.
+    """
     np = _np()
-    duration = 0.22
-    n = int(SR * duration)
+    duration = 0.18
+    n = int(sr * duration)
     t = np.linspace(0.0, duration, n, endpoint=False)
-    metallic = (
-        np.sin(2 * np.pi * 520.0 * t)
-        + 0.55 * np.sin(2 * np.pi * 1040.0 * t)
-        + 0.30 * np.sin(2 * np.pi * 1560.0 * t)
-    )
-    env = np.exp(-t * 17.0)
-    return metallic * env * 0.45
-
-
-def _synth_tick():
-    np = _np()
-    duration = 0.04
-    n = int(SR * duration)
-    t = np.linspace(0.0, duration, n, endpoint=False)
-    tone = np.sin(2 * np.pi * 1100.0 * t)
-    env = np.exp(-t * 70.0)
-    return tone * env * 0.22
-
-
-def _synth_round_win():
-    np = _np()
-    notes = [523.0, 659.0, 784.0, 1046.0]  # C5, E5, G5, C6
-    note_dur = 0.13
-    note_n = int(SR * note_dur)
-    duration = note_dur * len(notes)
-    n = int(SR * duration)
-    sig = np.zeros(n)
-    for i, freq in enumerate(notes):
-        start = i * note_n
-        end = min(start + note_n, n)
-        seg_n = end - start
-        t_seg = np.linspace(0.0, seg_n / SR, seg_n, endpoint=False)
-        env = np.exp(-t_seg * 4.0)
-        sig[start:end] += np.sin(2 * np.pi * freq * t_seg) * env
-    return sig * 0.42
+    rng = np.random.default_rng(3)
+    noise = rng.uniform(-1.0, 1.0, n)
+    body = np.convolve(noise, np.ones(20) / 20, mode="same")
+    env = np.minimum(t / 0.002, 1.0) * np.exp(-t * 11.0)
+    return body * env * 0.95
 
 
 _SYNTHS = {
     "fire": _synth_fire,
     "explosion": _synth_explosion,
     "hit": _synth_hit,
-    "tick": _synth_tick,
-    "round_win": _synth_round_win,
 }
 
 
 class AudioSystem:
     """Holds procedurally synthesized sounds and a mixer channel pool.
 
-    Numpy synthesis runs eagerly when constructed (no mixer needed). pygame
-    `Sound` creation is deferred until the first successful mixer init —
-    important in the browser, where the audio context only comes alive after
-    a user gesture. Once mixer init succeeds, all sounds are built and `play`
-    works for the rest of the session.
+    Synthesis runs once on first successful `_try_init`, using the mixer's
+    actual sample rate (not what we requested). Mixer init is deferred until
+    first `play()` so the browser AudioContext is unlocked by a user gesture.
     """
 
     def __init__(self) -> None:
         self.enabled = False
-        self._raw = {
-            name: _to_stereo_int16(synth()) for name, synth in _SYNTHS.items()
-        }
-        self.sounds = {}
-        # NOTE: don't call _try_init() here. In the browser pygame.mixer.init()
-        # can block on the AudioContext indefinitely; we wait until play() is
-        # called, which can only happen after a user gesture has unlocked it.
+        self.sample_rate: int | None = None
+        self.sounds: dict[str, pygame.mixer.Sound] = {}
 
     def _try_init(self) -> bool:
         if self.enabled:
@@ -134,8 +94,14 @@ class AudioSystem:
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init(C.AUDIO_SAMPLE_RATE, -16, 2, C.AUDIO_BUFFER)
+            init_info = pygame.mixer.get_init()
+            if init_info is None:
+                return False
+            actual_rate = init_info[0]
+            self.sample_rate = actual_rate
             pygame.mixer.set_num_channels(8)
-            for name, samples in self._raw.items():
+            for name, synth in _SYNTHS.items():
+                samples = _to_stereo_int16(synth(actual_rate))
                 self.sounds[name] = pygame.sndarray.make_sound(samples)
             self.enabled = True
             return True

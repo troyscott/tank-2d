@@ -186,9 +186,9 @@ class Game:
                 any_hit = True
         for t in self.tanks:
             t.seat(self.terrain)
-        self.audio.play("explosion")
-        if any_hit:
-            self.audio.play("hit")
+        # Distinct impact sound depending on what was hit: bright "explosion"
+        # for dirt, heavier "hit" for a tank.
+        self.audio.play("hit" if any_hit else "explosion")
         print(
             f"BOOM at ({int(x)},{int(y)})  wind={self.wind:+.0f}  "
             f"player_hp={self.player.hp} ai_hp={self.ai.hp}"
@@ -221,8 +221,6 @@ class Game:
         self.round_over_msg = msg
         self.player_score += p_delta
         self.ai_score += ai_delta
-        if p_delta > 0:
-            self.audio.play("round_win")
         if is_match_over(self.player_score, self.ai_score):
             self.match_over_msg = (
                 "YOU WIN THE MATCH"
@@ -230,8 +228,6 @@ class Game:
                 else "AI WINS THE MATCH"
             )
             self.state = STATE_MATCH_END
-            if self.player_score > self.ai_score:
-                self.audio.play("round_win")
         else:
             self.state = STATE_ROUND_OVER
 

@@ -4,7 +4,6 @@ import random
 import pygame
 
 from . import config as C
-from .audio import AudioSystem
 from .controller import AIController, PlayerController, World
 from .projectile import Projectile, damage_at
 from .tank import Tank
@@ -23,13 +22,6 @@ DIFFICULTY_KEYS = {
     pygame.K_2: "medium",
     pygame.K_3: "hard",
 }
-
-
-class _NullAudio:
-    enabled = False
-
-    def play(self, name: str) -> None:
-        return
 
 
 def round_outcome(player_alive: bool, ai_alive: bool) -> tuple[str, int, int]:
@@ -53,10 +45,10 @@ class Game:
         seed: int | None = None,
         ai_difficulty: str = C.AI_DEFAULT_DIFFICULTY,
         skip_menu: bool = False,
-        enable_audio: bool = True,
     ) -> None:
-        # Initialize only the pygame modules we need. pygame.init() also fires
-        # mixer.init() which blocks indefinitely on the browser AudioContext.
+        # Initialize only the pygame modules we need — explicitly skip
+        # pygame.init() (which would also fire mixer.init()). The game ships
+        # silent on purpose; see specs/SPEC.md for the audio history.
         pygame.display.init()
         pygame.font.init()
         pygame.display.set_caption("Tank Game")
@@ -69,8 +61,6 @@ class Game:
         self.big_font = pygame.font.Font(None, C.ROUND_OVER_FONT_SIZE)
         self.title_font = pygame.font.Font(None, C.MENU_TITLE_FONT_SIZE)
         self.menu_font = pygame.font.Font(None, C.MENU_LINE_FONT_SIZE)
-
-        self.audio = AudioSystem() if enable_audio else _NullAudio()
 
         self.rng = random.Random(seed)
         self.terrain = Terrain.generate(C.SCREEN_W, seed=seed)
@@ -96,10 +86,9 @@ class Game:
         self.round_over_msg = ""
         self.match_over_msg = ""
         self._frame_events: list[pygame.event.Event] = []
-        # After a projectile lands, we hold STATE_IMPACT for a beat so the
-        # bang and the crater have time to register before the next turn
-        # starts. These remember what _end_flight needs to do once the timer
-        # expires.
+        # After a projectile lands, hold STATE_IMPACT for a beat so the crater
+        # has time to register before the next turn starts. These remember
+        # what _end_flight needs to do once the timer expires.
         self._impact_timer = 0.0
         self._impact_landing_x: float | None = None
         self._impact_dying = False
@@ -119,7 +108,6 @@ class Game:
             wind=self.wind,
             gravity=C.GRAVITY,
             tanks=self.tanks,
-            audio=self.audio,
         )
 
     def _roll_wind(self) -> float:
@@ -194,8 +182,6 @@ class Game:
         self.flying = Projectile.fired_from(
             tip_x, tip_y, tank.angle_deg, tank.power, tank.facing
         )
-        # No fire sound — the only audio in the game is the projectile
-        # landing. The visual of the shell leaving the barrel is the cue.
 
     def _on_impact(self, x: float, y: float) -> None:
         self.terrain.apply_crater(int(x), y, C.EXPLOSION_RADIUS)
@@ -210,9 +196,6 @@ class Game:
                 any_hit = True
         for t in self.tanks:
             t.seat(self.terrain)
-        # One impact sound for any landing. The HP-bar drop is the visual cue
-        # that a tank took damage — separate hit/explosion audio was redundant.
-        self.audio.play("impact")
         print(
             f"BOOM at ({int(x)},{int(y)})  wind={self.wind:+.0f}  "
             f"player_hp={self.player.hp} ai_hp={self.ai.hp}"

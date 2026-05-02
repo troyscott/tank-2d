@@ -19,7 +19,6 @@ class World:
     wind: float
     gravity: float
     tanks: list["Tank"]
-    audio: object | None = None  # AudioSystem; left as `object` to avoid a cycle
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:

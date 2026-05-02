@@ -1,4 +1,0 @@
-impact.ogg
-  source: "25 CC0 bang/firework SFX" pack (bang_02)
-  https://opengameart.org/content/25-cc0-bang-firework-sfx
-  License: CC0 (public domain)

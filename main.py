@@ -1,6 +1,6 @@
 """Tank Game entry point.
 
-Browser-friendly defenses kept from the synth-era version:
+Browser-friendly defenses (matter for pygbag, harmless on native):
 - "loading..." paint so a visitor sees Python actually started.
 - try/except that paints uncaught exceptions onto the canvas. Browsers hide
   Python stdout, so without this, a crash looks like a silent grey screen.

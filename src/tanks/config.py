@@ -36,6 +36,12 @@ ANGLE_MAX = 180.0
 AI_TURN_DELAY = 0.8  # seconds AI takes between turn-start and firing
 AI_DEFAULT_DIFFICULTY = "medium"
 
+# After a projectile impact, hold the screen for this long so the player can
+# see the crater + hear the bang before the next turn starts. Without this,
+# turn transitions feel abrupt and audio doesn't line up with what's on
+# screen.
+IMPACT_SETTLE_DURATION = 0.55
+
 ROUNDS_TO_WIN = 3  # best-of-5: first player to 3 round wins takes the match
 
 AUDIO_SAMPLE_RATE = 22050

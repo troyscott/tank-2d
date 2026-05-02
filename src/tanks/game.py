@@ -14,6 +14,7 @@ STATE_MENU = "menu"
 STATE_PLAYER_TURN = "player_turn"
 STATE_AI_TURN = "ai_turn"
 STATE_FLIGHT = "flight"
+STATE_IMPACT = "impact"
 STATE_ROUND_OVER = "round_over"
 STATE_MATCH_END = "match_end"
 
@@ -95,6 +96,13 @@ class Game:
         self.round_over_msg = ""
         self.match_over_msg = ""
         self._frame_events: list[pygame.event.Event] = []
+        # After a projectile lands, we hold STATE_IMPACT for a beat so the
+        # bang and the crater have time to register before the next turn
+        # starts. These remember what _end_flight needs to do once the timer
+        # expires.
+        self._impact_timer = 0.0
+        self._impact_landing_x: float | None = None
+        self._impact_dying = False
         self.running = True
 
         if skip_menu:
@@ -161,7 +169,22 @@ class Game:
             if self.flying.hit_terrain(self.terrain):
                 self._on_impact(self.flying.x, self.flying.y)
             elif self.flying.off_screen(C.SCREEN_W, C.SCREEN_H):
+                # Off-screen miss: no impact sound, no settle period — just
+                # hand the turn over.
                 self._end_flight(landing_x=None)
+        elif self.state == STATE_IMPACT:
+            self._impact_timer -= dt
+            if self._impact_timer <= 0.0:
+                # Settle's done — either roll into the round-over screen (if
+                # someone died) or hand the turn over.
+                if self._impact_dying:
+                    self._controller_for(self.current_tank).end_turn(
+                        self.current_tank, self._world(), self._impact_landing_x
+                    )
+                    self.flying = None
+                    self._enter_round_over()
+                else:
+                    self._end_flight(landing_x=self._impact_landing_x)
 
     def _other(self, tank: Tank) -> Tank:
         return self.ai if tank is self.player else self.player
@@ -171,7 +194,8 @@ class Game:
         self.flying = Projectile.fired_from(
             tip_x, tip_y, tank.angle_deg, tank.power, tank.facing
         )
-        self.audio.play("fire")
+        # No fire sound — the only audio in the game is the projectile
+        # landing. The visual of the shell leaving the barrel is the cue.
 
     def _on_impact(self, x: float, y: float) -> None:
         self.terrain.apply_crater(int(x), y, C.EXPLOSION_RADIUS)
@@ -186,18 +210,21 @@ class Game:
                 any_hit = True
         for t in self.tanks:
             t.seat(self.terrain)
-        # Distinct impact sound depending on what was hit: bright "explosion"
-        # for dirt, heavier "hit" for a tank.
-        self.audio.play("hit" if any_hit else "explosion")
+        # One impact sound for any landing. The HP-bar drop is the visual cue
+        # that a tank took damage — separate hit/explosion audio was redundant.
+        self.audio.play("impact")
         print(
             f"BOOM at ({int(x)},{int(y)})  wind={self.wind:+.0f}  "
             f"player_hp={self.player.hp} ai_hp={self.ai.hp}"
         )
-        if not self.player.alive or not self.ai.alive:
-            self._end_flight(landing_x=x, dying=True)
-            self._enter_round_over()
-            return
-        self._end_flight(landing_x=x)
+
+        # Hold STATE_IMPACT briefly so the bang and the crater register before
+        # the next turn (or the round-over screen) appears. _update finishes
+        # the bookkeeping when the timer expires.
+        self._impact_landing_x = x
+        self._impact_dying = (not self.player.alive) or (not self.ai.alive)
+        self._impact_timer = C.IMPACT_SETTLE_DURATION
+        self.state = STATE_IMPACT
 
     def _end_flight(self, landing_x: float | None, dying: bool = False) -> None:
         self._controller_for(self.current_tank).end_turn(

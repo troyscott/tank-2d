@@ -125,16 +125,21 @@ If no solution (out of range), pick max range angle and let the player escape.
 
 ## 7. Audio
 
-`pygame.mixer` with 8-channel pool. SFX are procedurally generated at startup using `numpy` + `pygame.sndarray` — no asset files. Synthesis is intentionally simple — single-component waveforms with a single envelope per sound — because layered synths read as multiple events when actually played, even when only one `play()` call fires.
+`pygame.mixer` with 8-channel pool. **One pre-recorded CC0 OGG file**, loaded from `src/tanks/sounds/impact.ogg` and played via `pygame.mixer.Sound`.
 
-Three sounds:
-- `fire` — descending sine sweep (180→60 Hz), exponential decay; ~150 ms.
-- `explosion` — bright noise burst (light low-pass), fast decay; ~150 ms. Played when a projectile lands in dirt with no tank in the blast radius.
-- `hit` — darker noise burst (heavier low-pass than `explosion`), single envelope, slightly louder; ~180 ms. Distinct from `explosion` by tone (darker / heavier), not by layering. Played when a projectile damages a tank. *Layered versions with a metallic ring on top sounded like multiple events for a single impact — kept it single-component on purpose.*
+One sound:
+- `impact` — single bang, ~0.9 s. Played on every projectile landing, regardless of dirt/tank. The HP-bar drop is the visual cue for damage.
 
-The `explosion` and `hit` events are mutually exclusive — exactly one impact sound per impact, chosen by whether any tank took damage. (Earlier versions layered `explosion` + `hit` on tank hits, which sounded like a doubled blast.)
+The audio palette is intentionally minimal. Earlier drafts called for synthesized SFX (`fire`, `explosion`, `hit`, `tick`, `round_win`); each cut made the system simpler without losing feedback that the HUD doesn't already provide:
 
-**Cut from earlier drafts:** `tick` (aim feedback) was noise during a state where the player is already getting visual feedback from the HUD; `round_win` (arpeggio) duplicated the on-screen "ROUND OVER" overlay. Both removed.
+- **No firing sound.** The visual of the projectile leaving the barrel is the cue.
+- **No tank-hit-vs-dirt distinction.** The HP bar tells the player whether they damaged anything.
+- **No round/match-win arpeggio.** The "ROUND OVER" / "YOU WIN THE MATCH" overlay is the cue.
+- **No tick on aim adjust.** It was clutter during a state where the player has direct control of the HUD.
+
+The synth approach in earlier drafts (numpy + `pygame.sndarray`) was abandoned after extensive debugging: pygame doesn't resample, so synth at the wrong sample rate produced artifacts; layered synths fragmented into multiple perceived events when SDL resampled them. OGG files dodge all of that.
+
+**Source:** "25 CC0 bang/firework SFX" pack on OpenGameArt (CC0, public domain), `bang_02`. See `src/tanks/sounds/CREDITS.txt`.
 
 **Browser caveat:** `pygame.mixer.init()` can block on the locked AudioContext in pygbag — see `docs/browser-build.md` for the deferred-init pattern in `AudioSystem._try_init`.
 

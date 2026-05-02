@@ -24,7 +24,7 @@ print(f"mixer init: {pygame.mixer.get_init()}  (rate, format, channels)")
 print(f"num channels: {pygame.mixer.get_num_channels()}")
 print()
 
-for name in ("fire", "explosion", "hit"):
+for name in ("impact",):
     print(f"\n--- {name} (3 plays, 1s apart) ---")
     for i in range(3):
         print(f"  play {i + 1}")
@@ -32,6 +32,6 @@ for name in ("fire", "explosion", "hit"):
         time.sleep(1.0)
 
 print("\ndone. count the events you heard per play.")
-print("expected: 3 plays × 1 event each = 3 events total per sound.")
+print("expected: 3 events total (impact ×3).")
 pygame.mixer.quit()
 pygame.quit()

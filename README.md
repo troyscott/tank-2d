@@ -52,7 +52,16 @@ The web bundle can be pushed to a public itch.io page via [butler](https://itch.
 **One-time setup:**
 
 1. Create the project page on itch.io (web UI). Kind: HTML; remember the slug — it must match `troyscott/tank-2d` (or set `ITCH_PROJECT`).
-2. `brew install butler`.
+2. Install butler. **Note**: `brew install butler` installs an unrelated Mac app (`Butler.app`) — itch.io's butler isn't on Homebrew under that name. Download the binary directly from itch's CDN:
+   ```sh
+   ARCH=$(uname -m); [ "$ARCH" = "arm64" ] && CH=darwin-arm64 || CH=darwin-amd64
+   mkdir -p ~/.local/bin && cd /tmp
+   curl -fL -o butler.zip "https://broth.itch.zone/butler/${CH}/LATEST/archive/default"
+   unzip -o butler.zip && chmod +x butler && mv butler ~/.local/bin/
+   grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+   exec zsh && butler -V
+   ```
+   On Linux, swap `darwin-arm64` / `darwin-amd64` for `linux-amd64`.
 3. Get an API key from <https://itch.io/user/settings/api-keys> and export it in your shell:
    ```sh
    echo 'export BUTLER_API_KEY=your-key-here' >> ~/.zshrc && source ~/.zshrc

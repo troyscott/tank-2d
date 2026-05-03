@@ -1,6 +1,8 @@
 # tank
 
-A 2D side-view turn-based artillery duel in Python + pygame. One human vs. one AI, best-of-five, destructible terrain, per-round wind, three difficulty levels. The game ships silent — all feedback is visual; see `specs/SPEC.md` § 7 for the rationale.
+A 2D side-view turn-based artillery duel in Python + pygame. One human vs. one AI, best-of-five, destructible terrain, per-round wind, three difficulty levels. 
+
+Featuring a vibrant cyberpunk visual overhaul with procedural particle systems, screen shake, and glowing neon artillery. The game ships silent — all feedback is visual; see `specs/SPEC.md` § 7 for the rationale.
 
 ![screenshot](docs/screenshot.png)
 

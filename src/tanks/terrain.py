@@ -54,6 +54,29 @@ class Terrain:
             x = len(self.heights) - 1
         return self.heights[x]
 
+    def flatten_under(self, cx: int, width: int, blend_radius: int = 15) -> None:
+        if cx < 0 or cx >= len(self.heights):
+            return
+        flat_y = self.heights[cx]
+        x_lo = max(0, cx - width // 2)
+        x_hi = min(len(self.heights), cx + width // 2 + 1)
+        for x in range(x_lo, x_hi):
+            self.heights[x] = flat_y
+            
+        # blend left
+        for i in range(blend_radius):
+            x = x_lo - 1 - i
+            if x < 0: break
+            t = (i + 1) / (blend_radius + 1)
+            self.heights[x] = int(self.heights[x] * t + flat_y * (1 - t))
+            
+        # blend right
+        for i in range(blend_radius):
+            x = x_hi + i
+            if x >= len(self.heights): break
+            t = (i + 1) / (blend_radius + 1)
+            self.heights[x] = int(self.heights[x] * t + flat_y * (1 - t))
+
     def apply_crater(self, cx: int, cy: float, r: float) -> None:
         r2 = r * r
         x_lo = max(0, int(cx - r))

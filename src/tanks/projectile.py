@@ -55,9 +55,17 @@ class Projectile:
         )
 
     def render(self, surface: pygame.Surface) -> None:
+        # Additive glow
+        r = C.PROJECTILE_RADIUS
+        glow_size = r * 4
+        glow = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (C.PROJECTILE_COLOR[0], C.PROJECTILE_COLOR[1], C.PROJECTILE_COLOR[2], 100), (glow_size, glow_size), glow_size)
+        surface.blit(glow, (int(self.x - glow_size), int(self.y - glow_size)), special_flags=pygame.BLEND_RGBA_ADD)
+        
+        # Core
         pygame.draw.circle(
             surface,
-            C.PROJECTILE_COLOR,
+            (255, 255, 255),
             (int(self.x), int(self.y)),
-            C.PROJECTILE_RADIUS,
+            r,
         )

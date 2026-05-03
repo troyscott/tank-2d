@@ -8,6 +8,7 @@ from .controller import AIController, PlayerController, World
 from .projectile import Projectile, damage_at
 from .tank import Tank
 from .terrain import Terrain
+from .particles import ParticleSystem
 
 STATE_MENU = "menu"
 STATE_PLAYER_TURN = "player_turn"
@@ -57,10 +58,25 @@ class Game:
         # Font(None, ...) uses pygame's bundled default font and works the
         # same on native + pygbag/browser. SysFont triggers a system font
         # lookup that hangs in WebAssembly.
-        self.font = pygame.font.Font(None, C.HUD_FONT_SIZE)
-        self.big_font = pygame.font.Font(None, C.ROUND_OVER_FONT_SIZE)
-        self.title_font = pygame.font.Font(None, C.MENU_TITLE_FONT_SIZE)
-        self.menu_font = pygame.font.Font(None, C.MENU_LINE_FONT_SIZE)
+        font_path = "assets/Rajdhani-Bold.ttf"
+        try:
+            self.font = pygame.font.Font(font_path, C.HUD_FONT_SIZE)
+            self.big_font = pygame.font.Font(font_path, C.ROUND_OVER_FONT_SIZE)
+            self.title_font = pygame.font.Font(font_path, C.MENU_TITLE_FONT_SIZE)
+            self.menu_font = pygame.font.Font(font_path, C.MENU_LINE_FONT_SIZE)
+        except Exception:
+            self.font = pygame.font.Font(None, C.HUD_FONT_SIZE)
+            self.big_font = pygame.font.Font(None, C.ROUND_OVER_FONT_SIZE)
+            self.title_font = pygame.font.Font(None, C.MENU_TITLE_FONT_SIZE)
+            self.menu_font = pygame.font.Font(None, C.MENU_LINE_FONT_SIZE)
+            
+        try:
+            self.bg_img = pygame.image.load("assets/bg.png").convert()
+            self.bg_img = pygame.transform.scale(self.bg_img, (C.SCREEN_W, C.SCREEN_H))
+        except Exception:
+            self.bg_img = None
+            
+        self.game_surface = pygame.Surface((C.SCREEN_W, C.SCREEN_H))
 
         self.rng = random.Random(seed)
         self.terrain = Terrain.generate(C.SCREEN_W, seed=seed)
@@ -93,6 +109,10 @@ class Game:
         self._impact_landing_x: float | None = None
         self._impact_dying = False
         self.running = True
+        
+        self.particles = ParticleSystem()
+        self.shake_timer = 0.0
+        self.shake_amount = 0.0
 
         if skip_menu:
             self._start_match(ai_difficulty)
@@ -143,6 +163,17 @@ class Game:
         self._frame_events = events
 
     def _update(self, dt: float) -> None:
+        self.particles.update(dt)
+        if self.shake_timer > 0:
+            self.shake_timer -= dt
+            self.shake_amount *= 0.9
+            
+        for t in self.tanks:
+            if t.alive and t.hp < C.TANK_HP * 0.5:
+                if random.random() < 0.2:
+                    cx, cy = t.body_center()
+                    self.particles.spawn_tank_smoke(cx, cy)
+                    
         if self.state in (STATE_PLAYER_TURN, STATE_AI_TURN):
             ctrl = self._controller_for(self.current_tank)
             fired = ctrl.tick(
@@ -154,6 +185,7 @@ class Game:
                 self.state = STATE_FLIGHT
         elif self.state == STATE_FLIGHT and self.flying is not None:
             self.flying.update(dt, gravity=C.GRAVITY, wind=self.wind)
+            self.particles.spawn_smoke_trail(self.flying.x, self.flying.y)
             if self.flying.hit_terrain(self.terrain):
                 self._on_impact(self.flying.x, self.flying.y)
             elif self.flying.off_screen(C.SCREEN_W, C.SCREEN_H):
@@ -185,6 +217,9 @@ class Game:
 
     def _on_impact(self, x: float, y: float) -> None:
         self.terrain.apply_crater(int(x), y, C.EXPLOSION_RADIUS)
+        self.particles.spawn_explosion(x, y)
+        self.shake_timer = 0.5
+        self.shake_amount = 15.0
         impact = (x, y)
         any_hit = False
         for t in self.tanks:
@@ -270,33 +305,50 @@ class Game:
 
     # ---------------- rendering ----------------
     def _render(self) -> None:
-        self.screen.fill(C.SKY_COLOR)
+        if self.bg_img:
+            self.game_surface.blit(self.bg_img, (0, 0))
+        else:
+            self.game_surface.fill(C.SKY_COLOR)
+            
         if self.state == STATE_MENU:
-            self._render_menu()
+            self._render_menu(self.game_surface)
+            self.screen.blit(self.game_surface, (0, 0))
             pygame.display.flip()
             return
-        self.terrain.render(self.screen)
+            
+        self.terrain.render(self.game_surface)
         for t in self.tanks:
-            t.render(self.screen)
+            t.render(self.game_surface)
         if self.flying is not None:
-            self.flying.render(self.screen)
-        self._render_hud()
+            self.flying.render(self.game_surface)
+            
+        self.particles.render(self.game_surface, additive=False)
+        self.particles.render(self.game_surface, additive=True)
+            
+        self._render_hud(self.game_surface)
         if self.state == STATE_ROUND_OVER:
-            self._render_round_over()
+            self._render_round_over(self.game_surface)
         elif self.state == STATE_MATCH_END:
-            self._render_match_end()
+            self._render_match_end(self.game_surface)
+            
+        dx, dy = 0, 0
+        if self.shake_timer > 0 and self.shake_amount > 0.5:
+            dx = random.uniform(-self.shake_amount, self.shake_amount)
+            dy = random.uniform(-self.shake_amount, self.shake_amount)
+            
+        self.screen.blit(self.game_surface, (int(dx), int(dy)))
         pygame.display.flip()
 
-    def _render_menu(self) -> None:
+    def _render_menu(self, surface: pygame.Surface) -> None:
         title = self.title_font.render("TANK", True, C.HUD_COLOR)
         title_rect = title.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 - 80))
-        self.screen.blit(title, title_rect)
+        surface.blit(title, title_rect)
 
         subtitle = self.menu_font.render(
             "best-of-5 artillery duel", True, C.HUD_DIM_COLOR
         )
         sub_rect = subtitle.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 - 30))
-        self.screen.blit(subtitle, sub_rect)
+        surface.blit(subtitle, sub_rect)
 
         for i, (label, color) in enumerate(
             [
@@ -307,15 +359,15 @@ class Game:
         ):
             line = self.menu_font.render(label, True, color)
             r = line.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + i * 32))
-            self.screen.blit(line, r)
+            surface.blit(line, r)
 
         hint = self.font.render(
             "ESC quits", True, C.HUD_DIM_COLOR
         )
         hint_rect = hint.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H - 40))
-        self.screen.blit(hint, hint_rect)
+        surface.blit(hint, hint_rect)
 
-    def _render_hud(self) -> None:
+    def _render_hud(self, surface: pygame.Surface) -> None:
         # Left: turn status
         if self.state == STATE_PLAYER_TURN:
             left = (
@@ -334,8 +386,11 @@ class Game:
             left = ""
             color = C.HUD_COLOR
         if left:
+            # draw drop shadow
+            shadow = self.font.render(left, True, (0, 0, 0))
+            surface.blit(shadow, (12, 10))
             surf = self.font.render(left, True, color)
-            self.screen.blit(surf, (10, 8))
+            surface.blit(surf, (10, 8))
 
         # Center: score (best of ROUNDS_TO_WIN * 2 - 1)
         score_str = (
@@ -343,15 +398,26 @@ class Game:
             f"[{self.difficulty}]"
         )
         score_surf = self.font.render(score_str, True, C.HUD_COLOR)
+        score_shadow = self.font.render(score_str, True, (0, 0, 0))
         score_rect = score_surf.get_rect()
         score_rect.midtop = (C.SCREEN_W // 2, 8)
-        self.screen.blit(score_surf, score_rect)
+        shadow_rect = score_rect.copy()
+        shadow_rect.x += 2
+        shadow_rect.y += 2
+        surface.blit(score_shadow, shadow_rect)
+        surface.blit(score_surf, score_rect)
 
         # Right: wind
-        wind_surf = self.font.render(self._wind_string(), True, C.HUD_COLOR)
+        wind_str = self._wind_string()
+        wind_surf = self.font.render(wind_str, True, C.HUD_COLOR)
+        wind_shadow = self.font.render(wind_str, True, (0, 0, 0))
         wind_rect = wind_surf.get_rect()
         wind_rect.topright = (C.SCREEN_W - 10, 8)
-        self.screen.blit(wind_surf, wind_rect)
+        shadow_rect = wind_rect.copy()
+        shadow_rect.x += 2
+        shadow_rect.y += 2
+        surface.blit(wind_shadow, shadow_rect)
+        surface.blit(wind_surf, wind_rect)
 
     def _wind_string(self) -> str:
         mag = abs(self.wind)
@@ -361,26 +427,42 @@ class Game:
         bars = arrow * max(1, min(5, int(mag / 10) + 1))
         return f"WIND {bars} {self.wind:+.0f}"
 
-    def _render_round_over(self) -> None:
+    def _render_round_over(self, surface: pygame.Surface) -> None:
         msg = f"ROUND — {self.round_over_msg}"
         sub = (
             f"score {self.player_score} - {self.ai_score}    "
             f"press R for next round, ESC to quit"
         )
-        self._draw_overlay(msg, sub)
+        self._draw_overlay(surface, msg, sub)
 
-    def _render_match_end(self) -> None:
+    def _render_match_end(self, surface: pygame.Surface) -> None:
         msg = self.match_over_msg
         sub = (
             f"final score {self.player_score} - {self.ai_score}    "
             f"press R for menu, ESC to quit"
         )
-        self._draw_overlay(msg, sub)
+        self._draw_overlay(surface, msg, sub)
 
-    def _draw_overlay(self, msg: str, sub: str) -> None:
+    def _draw_overlay(self, surface: pygame.Surface, msg: str, sub: str) -> None:
+        # draw a semi-transparent black overlay
+        overlay = pygame.Surface((C.SCREEN_W, C.SCREEN_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        surface.blit(overlay, (0, 0))
+        
         surf = self.big_font.render(msg, True, C.ROUND_OVER_COLOR)
+        shadow = self.big_font.render(msg, True, (0, 0, 0))
         rect = surf.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 - 18))
-        self.screen.blit(surf, rect)
+        shadow_rect = rect.copy()
+        shadow_rect.x += 3
+        shadow_rect.y += 3
+        surface.blit(shadow, shadow_rect)
+        surface.blit(surf, rect)
+        
         sub_surf = self.font.render(sub, True, C.HUD_DIM_COLOR)
+        sub_shadow = self.font.render(sub, True, (0, 0, 0))
         sub_rect = sub_surf.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 + 18))
-        self.screen.blit(sub_surf, sub_rect)
+        sub_shadow_rect = sub_rect.copy()
+        sub_shadow_rect.x += 2
+        sub_shadow_rect.y += 2
+        surface.blit(sub_shadow, sub_shadow_rect)
+        surface.blit(sub_surf, sub_rect)

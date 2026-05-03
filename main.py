@@ -16,6 +16,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 async def main() -> None:
     import pygame  # noqa: PLC0415
 
+    # Force the mixer buffer size at the lowest SDL level before ANY subsystems boot.
+    # This prevents macOS/CoreAudio from locking in a high latency buffer.
+    pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.display.init()
     pygame.font.init()
     screen = pygame.display.set_mode((1024, 640))

@@ -86,13 +86,17 @@ class AIController(Controller):
         self.rng = rng or random.Random()
         self.delay = delay
         self.last_offset_x = 0.0
+        self._start_angle: float | None = None
+        self._start_power: float | None = None
         self._target_angle: float | None = None
         self._target_power: float | None = None
         self._timer = 0.0
-        self._armed = False
         self._fired = False
 
     def begin_turn(self, tank, world):
+        self._start_angle = tank.angle_deg
+        self._start_power = tank.power
+        
         opponent = next((t for t in world.tanks if t is not tank and t.alive), None)
         if opponent is None:
             self._target_angle = tank.angle_deg
@@ -110,20 +114,21 @@ class AIController(Controller):
             self._target_angle = angle_deg
             self._target_power = power
         self._timer = 0.0
-        self._armed = False
         self._fired = False
 
     def tick(self, tank, world, dt, events):
         self._timer += dt
-        # Telegraph: snap to target ~halfway through the delay so the player
-        # can see what the AI is aiming at before the shot.
-        if not self._armed and self._timer >= self.delay * 0.4:
-            if self._target_angle is not None:
-                tank.angle_deg = self._target_angle
-            if self._target_power is not None:
-                tank.power = self._target_power
-            self._armed = True
-        if self._armed and not self._fired and self._timer >= self.delay:
+        
+        # Smoothly interpolate barrel and power over the turn delay so the player
+        # can see what the AI is aiming at without a confusing pause before the shot.
+        progress = min(1.0, self._timer / self.delay)
+        
+        if self._start_angle is not None and self._target_angle is not None:
+            tank.angle_deg = self._start_angle + (self._target_angle - self._start_angle) * progress
+        if self._start_power is not None and self._target_power is not None:
+            tank.power = self._start_power + (self._target_power - self._start_power) * progress
+            
+        if not self._fired and self._timer >= self.delay:
             self._fired = True
             return True
         return False

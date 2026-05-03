@@ -22,9 +22,19 @@ async def main():
     pygame.image.save(game.screen, "docs/screenshots/00_cover.png")
     
     # 2. Midflight
-    game.state = "player_turn"
+    game.state = "flight"
+    game.current_tank = game.player
     game.player.angle_deg = 45
-    game.flying = Projectile(x=game.player.x + 20, y=game.player.y - 40, vx=100, vy=-100)
+    game.player.power = 700
+    game._fire(game.player)
+    # simulate some frames so it flies and generates a smoke trail
+    for _ in range(40):
+        if getattr(game, "particles", None):
+            game.particles.update(1.0 / 60.0)
+        if game.flying:
+            game.flying.update(1.0 / 60.0, game.wind)
+            if getattr(game, "particles", None):
+                game.particles.spawn_smoke_trail(game.flying.x, game.flying.y)
     game._render()
     pygame.image.save(game.screen, "docs/screenshots/02_midflight.png")
     

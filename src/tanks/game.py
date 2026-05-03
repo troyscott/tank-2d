@@ -9,6 +9,7 @@ from .projectile import Projectile, damage_at
 from .tank import Tank
 from .terrain import Terrain
 from .particles import ParticleSystem
+from .audio import AudioSystem
 
 STATE_MENU = "menu"
 STATE_PLAYER_TURN = "player_turn"
@@ -112,6 +113,7 @@ class Game:
         self.running = True
         
         self.particles = ParticleSystem()
+        self.audio = AudioSystem()
         self.shake_timer = 0.0
         self.shake_amount = 0.0
 
@@ -154,6 +156,8 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
+                elif event.key == pygame.K_m:
+                    self.audio.toggle()
                 elif self.state == STATE_MENU and event.key in DIFFICULTY_KEYS:
                     self._start_match(DIFFICULTY_KEYS[event.key])
                 elif event.key == pygame.K_r:
@@ -215,10 +219,12 @@ class Game:
         self.flying = Projectile.fired_from(
             tip_x, tip_y, tank.angle_deg, tank.power, tank.facing
         )
+        self.audio.play("fire")
 
     def _on_impact(self, x: float, y: float) -> None:
         self.terrain.apply_crater(int(x), y, C.EXPLOSION_RADIUS)
         self.particles.spawn_explosion(x, y)
+        self.audio.play("explosion")
         self.shake_timer = 0.5
         self.shake_amount = 15.0
         impact = (x, y)
@@ -362,6 +368,12 @@ class Game:
             line = self.menu_font.render(label, True, color)
             r = line.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + i * 32))
             surface.blit(line, r)
+
+        sound_state = "ON" if self.audio.enabled else "OFF"
+        sound_label = f"M   SOUND ({sound_state})"
+        s_line = self.menu_font.render(sound_label, True, C.HUD_DIM_COLOR)
+        s_r = s_line.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + 3 * 32 + 10))
+        surface.blit(s_line, s_r)
 
         hint = self.font.render(
             "ESC quits", True, C.HUD_DIM_COLOR

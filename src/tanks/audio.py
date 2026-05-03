@@ -26,15 +26,22 @@ class AudioSystem:
             self.sounds[name].play()
 
     def _init_mixer(self) -> None:
+        import sys
+        if sys.platform == 'emscripten':
+            try:
+                pygame.mixer.SoundPatch()
+            except Exception:
+                pass
+
         try:
             # Setting a low buffer (512 instead of the default which can be 4096+)
             # is critical for preventing audio latency / out-of-sync sound effects.
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
             self.initialized = True
             
-            # Load sounds
-            fire_path = os.path.join("assets", "fire.wav")
-            exp_path = os.path.join("assets", "explosion.wav")
+            # Load sounds (using .ogg which is heavily preferred by pygame and pygbag)
+            fire_path = os.path.join("assets", "fire.ogg")
+            exp_path = os.path.join("assets", "explosion.ogg")
             
             if os.path.exists(fire_path):
                 self.sounds["fire"] = pygame.mixer.Sound(fire_path)

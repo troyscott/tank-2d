@@ -104,21 +104,3 @@ class Tank:
         pygame.draw.line(surface, (40, 40, 40), 
                          (tip[0] - mb_dx, tip[1] - mb_dy), 
                          (tip[0] + mb_dx, tip[1] + mb_dy), C.TANK_BARREL_W + 4)
-
-        if self.alive:
-            self._render_hp_bar(surface)
-
-    def _render_hp_bar(self, surface: pygame.Surface) -> None:
-        body_top = self.y - C.TANK_BODY_H
-        turret_top = body_top - C.TANK_TURRET_H
-        bar_y = turret_top - C.HP_BAR_Y_OFFSET
-        bx = self.x - C.HP_BAR_W // 2
-        bg = pygame.Rect(bx, bar_y, C.HP_BAR_W, C.HP_BAR_H)
-        pygame.draw.rect(surface, C.HP_BAR_BG_COLOR, bg)
-        frac = self.hp / C.TANK_HP
-        fg_w = max(0, int(C.HP_BAR_W * frac))
-        if fg_w > 0:
-            r = int(255 * (1.0 - frac))
-            g = int(255 * frac)
-            fg = pygame.Rect(bx, bar_y, fg_w, C.HP_BAR_H)
-            pygame.draw.rect(surface, (r, g, 60), fg)

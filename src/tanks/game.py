@@ -84,6 +84,7 @@ class Game:
         self.ai = Tank(x=C.AI_X, color=C.AI_COLOR, facing=-1)
         self.tanks: list[Tank] = [self.player, self.ai]
         for t in self.tanks:
+            self.terrain.flatten_under(t.x, C.TANK_BODY_W + 10)
             t.seat(self.terrain)
 
         self.player_ctrl = PlayerController()
@@ -291,6 +292,7 @@ class Game:
         self.terrain = Terrain.generate(C.SCREEN_W, seed=new_seed)
         for t in self.tanks:
             t.hp = C.TANK_HP
+            self.terrain.flatten_under(t.x, C.TANK_BODY_W + 10)
             t.seat(self.terrain)
         self.wind = self._roll_wind()
         self.flying = None
@@ -418,6 +420,25 @@ class Game:
         shadow_rect.y += 2
         surface.blit(wind_shadow, shadow_rect)
         surface.blit(wind_surf, wind_rect)
+
+        # Player HP Bar (Top Left, below text)
+        p_frac = self.player.hp / C.TANK_HP
+        p_w = int(150 * p_frac)
+        pygame.draw.rect(surface, C.HP_BAR_BG_COLOR, (10, 36, 150, 8))
+        if p_w > 0:
+            r = int(255 * (1.0 - p_frac))
+            g = int(255 * p_frac)
+            pygame.draw.rect(surface, (r, g, 60), (10, 36, p_w, 8))
+            
+        # AI HP Bar (Top Right, below text)
+        ai_frac = self.ai.hp / C.TANK_HP
+        ai_w = int(150 * ai_frac)
+        ai_x = C.SCREEN_W - 10 - 150
+        pygame.draw.rect(surface, C.HP_BAR_BG_COLOR, (ai_x, 36, 150, 8))
+        if ai_w > 0:
+            r = int(255 * (1.0 - ai_frac))
+            g = int(255 * ai_frac)
+            pygame.draw.rect(surface, (r, g, 60), (ai_x + 150 - ai_w, 36, ai_w, 8))
 
     def _wind_string(self) -> str:
         mag = abs(self.wind)

@@ -348,15 +348,24 @@ class Game:
         pygame.display.flip()
 
     def _render_menu(self, surface: pygame.Surface) -> None:
-        title = self.title_font.render("TANK", True, C.HUD_COLOR)
-        title_rect = title.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 - 80))
-        surface.blit(title, title_rect)
+        # Draw a semi-transparent dark overlay to dim the background
+        overlay = pygame.Surface((C.SCREEN_W, C.SCREEN_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        surface.blit(overlay, (0, 0))
 
-        subtitle = self.menu_font.render(
-            "best-of-5 artillery duel", True, C.HUD_DIM_COLOR
-        )
-        sub_rect = subtitle.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 - 30))
-        surface.blit(subtitle, sub_rect)
+        # Helper to draw text with a drop shadow
+        def draw_text(font, text, color, center_pos, shadow_offset=(2, 2)):
+            surf = font.render(text, True, color)
+            shadow = font.render(text, True, (0, 0, 0))
+            rect = surf.get_rect(center=center_pos)
+            shadow_rect = rect.copy()
+            shadow_rect.x += shadow_offset[0]
+            shadow_rect.y += shadow_offset[1]
+            surface.blit(shadow, shadow_rect)
+            surface.blit(surf, rect)
+
+        draw_text(self.title_font, "TANK", C.HUD_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 - 80), (4, 4))
+        draw_text(self.menu_font, "best-of-5 artillery duel", C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 - 30))
 
         for i, (label, color) in enumerate(
             [
@@ -365,21 +374,13 @@ class Game:
                 ("3   HARD", C.HUD_COLOR),
             ]
         ):
-            line = self.menu_font.render(label, True, color)
-            r = line.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + i * 32))
-            surface.blit(line, r)
+            draw_text(self.menu_font, label, color, (C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + i * 32))
 
         sound_state = "ON" if self.audio.enabled else "OFF"
         sound_label = f"M   SOUND ({sound_state})"
-        s_line = self.menu_font.render(sound_label, True, C.HUD_DIM_COLOR)
-        s_r = s_line.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + 3 * 32 + 10))
-        surface.blit(s_line, s_r)
+        draw_text(self.menu_font, sound_label, C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + 3 * 32 + 10))
 
-        hint = self.font.render(
-            "ESC quits", True, C.HUD_DIM_COLOR
-        )
-        hint_rect = hint.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H - 40))
-        surface.blit(hint, hint_rect)
+        draw_text(self.font, "ESC quits", C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H - 40))
 
     def _render_hud(self, surface: pygame.Surface) -> None:
         # Left: turn status

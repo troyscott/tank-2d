@@ -27,7 +27,9 @@ class AudioSystem:
 
     def _init_mixer(self) -> None:
         try:
-            pygame.mixer.init()
+            # Setting a low buffer (512 instead of the default which can be 4096+)
+            # is critical for preventing audio latency / out-of-sync sound effects.
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
             self.initialized = True
             
             # Load sounds

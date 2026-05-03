@@ -36,14 +36,16 @@ async def main():
     
     # 4. AI Aiming
     game.state = "ai_turn"
+    game.current_tank = game.ai
     game.ai.angle_deg = 135
     game._render()
     pygame.image.save(game.screen, "docs/screenshots/04_ai_aiming.png")
     
     # 5. Match End
-    game.state = "match_over"
-    game.p1_wins = 3
-    game.p2_wins = 1
+    game.state = "match_end"
+    game.player_score = 3
+    game.ai_score = 1
+    game.match_over_msg = "YOU WIN THE MATCH"
     game._render()
     pygame.image.save(game.screen, "docs/screenshots/05_match_end.png")
     

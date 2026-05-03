@@ -140,6 +140,9 @@ class Game:
     async def run(self) -> None:
         while self.running:
             dt = self.clock.tick(C.FPS) / 1000.0
+            # Cap dt at 50ms. If the game hangs (e.g. during audio initialization
+            # or OS background tasks), we slow down rather than teleporting physics.
+            dt = min(dt, 0.05)
             self._handle_events()
             self._update(dt)
             self._render()

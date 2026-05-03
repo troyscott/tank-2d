@@ -14,6 +14,10 @@ class AudioSystem:
 
     def toggle(self) -> None:
         self.enabled = not self.enabled
+        # Eagerly initialize the mixer right when toggled so the 
+        # initialization latency happens on the menu, not during a shot!
+        if self.enabled and not self.initialized:
+            self._init_mixer()
 
     def play(self, name: str) -> None:
         if not self.enabled:

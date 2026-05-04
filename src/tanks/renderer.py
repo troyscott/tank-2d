@@ -1,4 +1,6 @@
+import functools
 import random
+
 import pygame
 from . import config as C
 
@@ -46,7 +48,7 @@ class Renderer:
         for t in game.tanks:
             t.render(self.game_surface)
         if game.flying is not None:
-            game.flying.render(self.game_surface)
+            self._render_projectile(self.game_surface, game.flying)
 
         game.particles.render(self.game_surface, additive=False)
         game.particles.render(self.game_surface, additive=True)
@@ -86,6 +88,33 @@ class Renderer:
         shadow_rect.y += offset[1]
         surface.blit(shadow, shadow_rect)
         surface.blit(surf, rect)
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _get_projectile_glow(radius: int, r: int, g: int, b: int) -> pygame.Surface:
+        glow_size = radius * 4
+        glow = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (r, g, b, 100), (glow_size, glow_size), glow_size)
+        return glow
+
+    def _render_projectile(self, surface: pygame.Surface, proj) -> None:
+        radius = C.PROJECTILE_RADIUS
+        glow = self._get_projectile_glow(
+            radius, C.PROJECTILE_COLOR[0], C.PROJECTILE_COLOR[1], C.PROJECTILE_COLOR[2]
+        )
+        glow_size = radius * 4
+        surface.blit(
+            glow,
+            (int(proj.x - glow_size), int(proj.y - glow_size)),
+            special_flags=pygame.BLEND_RGBA_ADD,
+        )
+
+        pygame.draw.circle(
+            surface,
+            (255, 255, 255),
+            (int(proj.x), int(proj.y)),
+            radius,
+        )
 
     def _render_touch_ui(
         self, surface: pygame.Surface, touch_mode: bool, virtual_keys: dict[str, bool]

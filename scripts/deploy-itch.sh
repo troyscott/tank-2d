@@ -23,11 +23,12 @@ if [[ -z "$VERSION" ]]; then
     exit 2
 fi
 
-if [[ -z "${BUTLER_API_KEY:-}" ]]; then
-    echo "error: BUTLER_API_KEY is not set." >&2
-    echo "       add 'export BUTLER_API_KEY=...' to your shell rc and reload." >&2
-    exit 2
-fi
+# The user can rely on local credentials (butler login) instead of the API key
+# if [[ -z "${BUTLER_API_KEY:-}" ]]; then
+#     echo "error: BUTLER_API_KEY is not set." >&2
+#     echo "       add 'export BUTLER_API_KEY=...' to your shell rc and reload." >&2
+#     exit 2
+# fi
 
 if ! command -v butler >/dev/null 2>&1; then
     echo "error: butler not on PATH. install via 'brew install butler'." >&2

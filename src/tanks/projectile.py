@@ -1,4 +1,5 @@
 import math
+import functools
 from dataclasses import dataclass
 
 import pygame
@@ -48,13 +49,8 @@ class Projectile:
         return self.y >= terrain.heights[ix]
 
     def off_screen(self, width: int, height: int, margin: int = 50) -> bool:
-        return (
-            self.x < -margin
-            or self.x > width + margin
-            or self.y > height + margin
-        )
+        return self.x < -margin or self.x > width + margin or self.y > height + margin
 
-import functools
 
 @functools.lru_cache(maxsize=1)
 def _get_projectile_glow(radius: int, r: int, g: int, b: int) -> pygame.Surface:
@@ -66,10 +62,16 @@ def _get_projectile_glow(radius: int, r: int, g: int, b: int) -> pygame.Surface:
     def render(self, surface: pygame.Surface) -> None:
         # Additive glow
         radius = C.PROJECTILE_RADIUS
-        glow = _get_projectile_glow(radius, C.PROJECTILE_COLOR[0], C.PROJECTILE_COLOR[1], C.PROJECTILE_COLOR[2])
+        glow = _get_projectile_glow(
+            radius, C.PROJECTILE_COLOR[0], C.PROJECTILE_COLOR[1], C.PROJECTILE_COLOR[2]
+        )
         glow_size = radius * 4
-        surface.blit(glow, (int(self.x - glow_size), int(self.y - glow_size)), special_flags=pygame.BLEND_RGBA_ADD)
-        
+        surface.blit(
+            glow,
+            (int(self.x - glow_size), int(self.y - glow_size)),
+            special_flags=pygame.BLEND_RGBA_ADD,
+        )
+
         # Core
         pygame.draw.circle(
             surface,

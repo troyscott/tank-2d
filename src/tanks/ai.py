@@ -14,9 +14,15 @@ class DifficultyCfg:
 
 
 DIFFICULTY: dict[str, DifficultyCfg] = {
-    "easy":   DifficultyCfg(angle_sigma_deg=15.0, power_sigma_frac=0.20, wind_aware=False, memory=False),
-    "medium": DifficultyCfg(angle_sigma_deg=5.0,  power_sigma_frac=0.08, wind_aware=False, memory=True),
-    "hard":   DifficultyCfg(angle_sigma_deg=1.0,  power_sigma_frac=0.02, wind_aware=True,  memory=True),
+    "easy": DifficultyCfg(
+        angle_sigma_deg=15.0, power_sigma_frac=0.20, wind_aware=False, memory=False
+    ),
+    "medium": DifficultyCfg(
+        angle_sigma_deg=5.0, power_sigma_frac=0.08, wind_aware=False, memory=True
+    ),
+    "hard": DifficultyCfg(
+        angle_sigma_deg=1.0, power_sigma_frac=0.02, wind_aware=True, memory=True
+    ),
 }
 
 
@@ -61,6 +67,7 @@ def plan_shot(
     cfg: DifficultyCfg,
     last_offset_x: float,
     rng: random.Random,
+    facing: int,
 ) -> tuple[float, float]:
     """Pick the (angle_deg, power) the AI will fire with.
 
@@ -81,11 +88,7 @@ def plan_shot(
         angle_rad = math.radians(45.0)  # max-range fallback for flat ground
 
     if cfg.wind_aware:
-        # Crude compensation: bias barrel into the wind. Negative sign because
-        # wind > 0 pushes the shell rightward, so left-facing tanks need the
-        # opposite correction; the magnitude was tuned by feel.
-        facing_sign = 1.0 if (tx - sx) >= 0 else -1.0
-        angle_rad -= facing_sign * wind * 0.0015
+        angle_rad -= facing * wind * 0.0015
 
     angle_rad += math.radians(rng.gauss(0.0, cfg.angle_sigma_deg))
     v *= 1.0 + rng.gauss(0.0, cfg.power_sigma_frac)

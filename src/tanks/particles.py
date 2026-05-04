@@ -1,7 +1,9 @@
 import random
 import math
 import pygame
+import functools
 from dataclasses import dataclass
+
 
 @dataclass
 class Particle:
@@ -16,21 +18,36 @@ class Particle:
     shrink: bool = True
     gravity: float = 0.0
 
-import functools
 
 @functools.lru_cache(maxsize=1024)
-def _get_glow_surface(radius: int, r: int, g: int, b: int, alpha: int) -> pygame.Surface:
+def _get_glow_surface(
+    radius: int, r: int, g: int, b: int, alpha: int
+) -> pygame.Surface:
     size = radius * 2 + 2
     temp = pygame.Surface((size, size), pygame.SRCALPHA)
-    pygame.draw.circle(temp, (r, g, b, alpha), (size//2, size//2), radius)
+    pygame.draw.circle(temp, (r, g, b, alpha), (size // 2, size // 2), radius)
     return temp
+
 
 class ParticleSystem:
     def __init__(self):
         self.particles: list[Particle] = []
 
-    def spawn(self, x: float, y: float, vx: float, vy: float, life: float, color: tuple[int, int, int], radius: float, shrink: bool = True, gravity: float = 0.0):
-        self.particles.append(Particle(x, y, vx, vy, life, life, color, radius, shrink, gravity))
+    def spawn(
+        self,
+        x: float,
+        y: float,
+        vx: float,
+        vy: float,
+        life: float,
+        color: tuple[int, int, int],
+        radius: float,
+        shrink: bool = True,
+        gravity: float = 0.0,
+    ):
+        self.particles.append(
+            Particle(x, y, vx, vy, life, life, color, radius, shrink, gravity)
+        )
 
     def update(self, dt: float):
         alive = []
@@ -50,11 +67,17 @@ class ParticleSystem:
                 r_val = p.radius * (p.life / p.max_life if p.shrink else 1.0)
                 if r_val <= 0.5:
                     continue
-                
+
                 # Use cached surface to avoid allocation per frame
-                glow = _get_glow_surface(int(r_val), p.color[0], p.color[1], p.color[2], alpha)
+                glow = _get_glow_surface(
+                    int(r_val), p.color[0], p.color[1], p.color[2], alpha
+                )
                 size = int(r_val) * 2 + 2
-                surface.blit(glow, (int(p.x - size//2), int(p.y - size//2)), special_flags=pygame.BLEND_RGBA_ADD)
+                surface.blit(
+                    glow,
+                    (int(p.x - size // 2), int(p.y - size // 2)),
+                    special_flags=pygame.BLEND_RGBA_ADD,
+                )
         else:
             for p in self.particles:
                 r = p.radius * (p.life / p.max_life if p.shrink else 1.0)
@@ -70,16 +93,35 @@ class ParticleSystem:
             life = random.uniform(0.2, 0.6)
             color = random.choice([(255, 200, 50), (255, 100, 20), (255, 50, 10)])
             radius = random.uniform(4, 12)
-            self.spawn(x, y, math.cos(angle)*speed, math.sin(angle)*speed, life, color, radius, shrink=True)
-            
+            self.spawn(
+                x,
+                y,
+                math.cos(angle) * speed,
+                math.sin(angle) * speed,
+                life,
+                color,
+                radius,
+                shrink=True,
+            )
+
         # Debris/Dirt
         for _ in range(count):
-            angle = random.uniform(0, math.pi) # upper half
+            angle = random.uniform(0, math.pi)  # upper half
             speed = random.uniform(100, 300)
             life = random.uniform(0.5, 1.5)
             color = random.choice([(96, 72, 48), (64, 48, 32), (132, 168, 84)])
             radius = random.uniform(2, 5)
-            self.spawn(x, y, math.cos(angle)*speed, -math.sin(angle)*speed, life, color, radius, shrink=False, gravity=400.0)
+            self.spawn(
+                x,
+                y,
+                math.cos(angle) * speed,
+                -math.sin(angle) * speed,
+                life,
+                color,
+                radius,
+                shrink=False,
+                gravity=400.0,
+            )
 
     def spawn_smoke_trail(self, x: float, y: float):
         # Smoke
@@ -88,7 +130,17 @@ class ParticleSystem:
         life = random.uniform(0.5, 1.0)
         color = (150, 150, 150)
         radius = random.uniform(3, 6)
-        self.spawn(x, y, math.cos(angle)*speed, math.sin(angle)*speed, life, color, radius, shrink=True, gravity=-20.0)
+        self.spawn(
+            x,
+            y,
+            math.cos(angle) * speed,
+            math.sin(angle) * speed,
+            life,
+            color,
+            radius,
+            shrink=True,
+            gravity=-20.0,
+        )
 
     def spawn_tank_smoke(self, x: float, y: float):
         # Dark smoke rising
@@ -96,4 +148,13 @@ class ParticleSystem:
         life = random.uniform(1.0, 2.0)
         color = (50, 50, 50)
         radius = random.uniform(4, 8)
-        self.spawn(x, y + random.uniform(-5, 5), random.uniform(-10, 10), -speed, life, color, radius, shrink=True)
+        self.spawn(
+            x,
+            y + random.uniform(-5, 5),
+            random.uniform(-10, 10),
+            -speed,
+            life,
+            color,
+            radius,
+            shrink=True,
+        )

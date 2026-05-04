@@ -6,7 +6,9 @@ import pygame
 from . import config as C
 
 
-def _midpoint_displacement(width: int, roughness: float, rng: random.Random) -> list[int]:
+def _midpoint_displacement(
+    width: int, roughness: float, rng: random.Random
+) -> list[int]:
     n = 1
     while n + 1 < width:
         n *= 2
@@ -62,18 +64,20 @@ class Terrain:
         x_hi = min(len(self.heights), cx + width // 2 + 1)
         for x in range(x_lo, x_hi):
             self.heights[x] = flat_y
-            
+
         # blend left
         for i in range(blend_radius):
             x = x_lo - 1 - i
-            if x < 0: break
+            if x < 0:
+                break
             t = (i + 1) / (blend_radius + 1)
             self.heights[x] = int(self.heights[x] * t + flat_y * (1 - t))
-            
+
         # blend right
         for i in range(blend_radius):
             x = x_hi + i
-            if x >= len(self.heights): break
+            if x >= len(self.heights):
+                break
             t = (i + 1) / (blend_radius + 1)
             self.heights[x] = int(self.heights[x] * t + flat_y * (1 - t))
 

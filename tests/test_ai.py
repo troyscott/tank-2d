@@ -8,7 +8,9 @@ from tanks.ai import DIFFICULTY, DifficultyCfg, plan_shot, solve_angle
 from tanks.projectile import Projectile
 
 
-def _simulate(angle_rad: float, v: float, g: float, max_x: float, dt: float = 1 / 240) -> Projectile:
+def _simulate(
+    angle_rad: float, v: float, g: float, max_x: float, dt: float = 1 / 240
+) -> Projectile:
     p = Projectile(0.0, 0.0, v * math.cos(angle_rad), -v * math.sin(angle_rad))
     while p.x < max_x and p.y < 5000:
         p.update(dt=dt, gravity=g, wind=0.0)
@@ -64,45 +66,69 @@ def test_difficulty_table_matches_spec():
 
 
 def test_plan_shot_zero_noise_is_deterministic():
-    cfg = DifficultyCfg(angle_sigma_deg=0, power_sigma_frac=0, wind_aware=False, memory=False)
+    cfg = DifficultyCfg(
+        angle_sigma_deg=0, power_sigma_frac=0, wind_aware=False, memory=False
+    )
     a1, p1 = plan_shot(
-        shooter_xy=(100, 300), target_xy=(700, 300),
-        gravity=400.0, wind=0.0, cfg=cfg, last_offset_x=0.0,
+        shooter_xy=(100, 300),
+        target_xy=(700, 300),
+        gravity=400.0,
+        wind=0.0,
+        cfg=cfg,
+        last_offset_x=0.0,
         rng=random.Random(1),
+        facing=1,
     )
     a2, p2 = plan_shot(
-        shooter_xy=(100, 300), target_xy=(700, 300),
-        gravity=400.0, wind=0.0, cfg=cfg, last_offset_x=0.0,
+        shooter_xy=(100, 300),
+        target_xy=(700, 300),
+        gravity=400.0,
+        wind=0.0,
+        cfg=cfg,
+        last_offset_x=0.0,
         rng=random.Random(99),
+        facing=1,
     )
     assert a1 == pytest.approx(a2)
     assert p1 == pytest.approx(p2)
 
 
 def test_plan_shot_memory_changes_aim_when_offset_nonzero():
-    cfg_mem = DifficultyCfg(angle_sigma_deg=0, power_sigma_frac=0, wind_aware=False, memory=True)
-    cfg_nomem = DifficultyCfg(angle_sigma_deg=0, power_sigma_frac=0, wind_aware=False, memory=False)
-    args = dict(
-        shooter_xy=(100, 300), target_xy=(700, 300),
-        gravity=400.0, wind=0.0, last_offset_x=80.0,
+    cfg_mem = DifficultyCfg(
+        angle_sigma_deg=0, power_sigma_frac=0, wind_aware=False, memory=True
     )
-    a_mem, _ = plan_shot(cfg=cfg_mem, rng=random.Random(1), **args)
-    a_nomem, _ = plan_shot(cfg=cfg_nomem, rng=random.Random(1), **args)
+    cfg_nomem = DifficultyCfg(
+        angle_sigma_deg=0, power_sigma_frac=0, wind_aware=False, memory=False
+    )
+    args = dict(
+        shooter_xy=(100, 300),
+        target_xy=(700, 300),
+        gravity=400.0,
+        wind=0.0,
+        last_offset_x=80.0,
+    )
+    a_mem, _ = plan_shot(cfg=cfg_mem, rng=random.Random(1), facing=1, **args)
+    a_nomem, _ = plan_shot(cfg=cfg_nomem, rng=random.Random(1), facing=1, **args)
     assert a_mem != a_nomem
 
 
 def test_plan_shot_easy_noise_envelope_wider_than_hard():
     args = dict(
-        shooter_xy=(100, 300), target_xy=(700, 300),
-        gravity=400.0, wind=0.0, last_offset_x=0.0,
+        shooter_xy=(100, 300),
+        target_xy=(700, 300),
+        gravity=400.0,
+        wind=0.0,
+        last_offset_x=0.0,
     )
     rng = random.Random(0)
     easy_angles = [
-        plan_shot(cfg=DIFFICULTY["easy"], rng=rng, **args)[0] for _ in range(200)
+        plan_shot(cfg=DIFFICULTY["easy"], rng=rng, facing=1, **args)[0]
+        for _ in range(200)
     ]
     rng = random.Random(0)
     hard_angles = [
-        plan_shot(cfg=DIFFICULTY["hard"], rng=rng, **args)[0] for _ in range(200)
+        plan_shot(cfg=DIFFICULTY["hard"], rng=rng, facing=1, **args)[0]
+        for _ in range(200)
     ]
 
     def stddev(xs):
@@ -113,12 +139,20 @@ def test_plan_shot_easy_noise_envelope_wider_than_hard():
 
 
 def test_plan_shot_clamps_to_legal_ranges():
-    cfg = DifficultyCfg(angle_sigma_deg=200, power_sigma_frac=5.0, wind_aware=False, memory=False)
+    cfg = DifficultyCfg(
+        angle_sigma_deg=200, power_sigma_frac=5.0, wind_aware=False, memory=False
+    )
     rng = random.Random(0)
     for _ in range(50):
         ang, pw = plan_shot(
-            shooter_xy=(100, 300), target_xy=(700, 300),
-            gravity=400.0, wind=0.0, cfg=cfg, last_offset_x=0.0, rng=rng,
+            shooter_xy=(100, 300),
+            target_xy=(700, 300),
+            gravity=400.0,
+            wind=0.0,
+            cfg=cfg,
+            last_offset_x=0.0,
+            rng=rng,
+            facing=1,
         )
         assert C.ANGLE_MIN <= ang <= C.ANGLE_MAX
         assert C.POWER_MIN <= pw <= C.POWER_MAX

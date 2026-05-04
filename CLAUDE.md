@@ -21,6 +21,13 @@ pip install -r requirements.txt
 ./.venv/bin/pytest tests/ -q
 ```
 
+## Linting & Type Checking
+To prevent silent failures, the project uses `ruff` (linter) and `mypy` (type checker).
+```sh
+./.venv/bin/ruff check src/tanks main.py tests
+./.venv/bin/mypy src/tanks main.py
+```
+
 ## Building for the Web
 The game can be compiled to WebAssembly using `pygbag` to run in the browser.
 ```sh

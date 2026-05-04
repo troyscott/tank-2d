@@ -8,14 +8,14 @@ TERRAIN_MAX_DISP = int(SCREEN_H * 0.30)
 TERRAIN_MIN_Y = int(SCREEN_H * 0.30)
 TERRAIN_MAX_Y = int(SCREEN_H * 0.90)
 
-SKY_COLOR = (24, 32, 54) # Fallback if bg image fails
-TERRAIN_COLOR = (20, 15, 30) # Dark cyberpunk purple
-TERRAIN_TOP_COLOR = (255, 50, 150) # Neon pink line
+SKY_COLOR = (24, 32, 54)  # Fallback if bg image fails
+TERRAIN_COLOR = (20, 15, 30)  # Dark cyberpunk purple
+TERRAIN_TOP_COLOR = (255, 50, 150)  # Neon pink line
 
 PLAYER_X = 150
 AI_X = SCREEN_W - 150
-PLAYER_COLOR = (0, 255, 255) # Cyan
-AI_COLOR = (255, 50, 50) # Red
+PLAYER_COLOR = (0, 255, 255)  # Cyan
+AI_COLOR = (255, 50, 50)  # Red
 
 TANK_BODY_W = 48
 TANK_BODY_H = 16

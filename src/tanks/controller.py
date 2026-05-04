@@ -53,14 +53,12 @@ class Controller(ABC):
 
 class PlayerController(Controller):
     def tick(self, tank, world, dt, events, virtual_keys):
-        keys = pygame.key.get_pressed()
-        
-        left = keys[pygame.K_LEFT] or virtual_keys.get("LEFT", False)
-        right = keys[pygame.K_RIGHT] or virtual_keys.get("RIGHT", False)
-        up = keys[pygame.K_UP] or virtual_keys.get("UP", False)
-        down = keys[pygame.K_DOWN] or virtual_keys.get("DOWN", False)
-        fire = keys[pygame.K_SPACE] or virtual_keys.get("SPACE", False)
-        
+        left = virtual_keys.get("LEFT", False)
+        right = virtual_keys.get("RIGHT", False)
+        up = virtual_keys.get("UP", False)
+        down = virtual_keys.get("DOWN", False)
+        fire = virtual_keys.get("SPACE", False)
+
         if left:
             tank.angle_deg = _clamp(
                 tank.angle_deg + C.ANGLE_RATE_DEG_PER_SEC * dt, C.ANGLE_MIN, C.ANGLE_MAX
@@ -107,7 +105,7 @@ class AIController(Controller):
     def begin_turn(self, tank: "Tank", world: World) -> None:
         self._start_angle = tank.angle_deg
         self._start_power = tank.power
-        
+
         opponent = next((t for t in world.tanks if t is not tank and t.alive), None)
         if opponent is None:
             self._target_angle = tank.angle_deg
@@ -121,16 +119,28 @@ class AIController(Controller):
                 cfg=self.cfg,
                 last_offset_x=self.last_offset_x,
                 rng=self.rng,
+                facing=tank.facing,
             )
             self._target_angle = angle_deg
             self._target_power = power
-        
+
         self.turn_state = "THINKING"
         self.turn_delay_timer = 1.0
         self._fired = False
 
-    def tick(self, tank: "Tank", world: World, dt: float, events: list[pygame.event.Event], virtual_keys: dict[str, bool]) -> bool:
-        if self._start_angle is None or self._target_angle is None or self._target_power is None:
+    def tick(
+        self,
+        tank: "Tank",
+        world: World,
+        dt: float,
+        events: list[pygame.event.Event],
+        virtual_keys: dict[str, bool],
+    ) -> bool:
+        if (
+            self._start_angle is None
+            or self._target_angle is None
+            or self._target_power is None
+        ):
             return False
 
         if self.turn_state == "THINKING":
@@ -151,14 +161,14 @@ class AIController(Controller):
                 else:
                     tank.angle_deg += move_dir * move_amount
                 return False
-                
+
             # Once angle is reached, snap power instantly and fire
             tank.angle_deg = self._target_angle
             tank.power = self._target_power
             self.turn_state = "FIRING"
             # Return true on the exact frame we snap the power and transition to firing
             return True
-            
+
         return False
 
     def end_turn(self, tank: "Tank", world: World, landing_x: float | None) -> None:

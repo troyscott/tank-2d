@@ -5,6 +5,7 @@ Browser-friendly defenses (matter for pygbag, harmless on native):
 - try/except that paints uncaught exceptions onto the canvas. Browsers hide
   Python stdout, so without this, a crash looks like a silent grey screen.
 """
+
 import asyncio
 import sys
 import traceback
@@ -15,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 async def main() -> None:
     import pygame  # noqa: PLC0415
+    from tanks import config as C
 
     # Force the mixer buffer size at the lowest SDL level before ANY subsystems boot.
     # This prevents macOS/CoreAudio from locking in a high latency buffer.
@@ -32,7 +34,34 @@ async def main() -> None:
 
     try:
         from tanks.game import Game  # noqa: PLC0415
-        await Game().run()
+        from tanks.renderer import Renderer
+        from tanks.input import InputRouter
+
+        game = Game(skip_menu=False)
+        renderer = Renderer()
+        input_router = InputRouter()
+
+        clock = pygame.time.Clock()
+
+        while True:
+            dt = clock.tick(C.FPS) / 1000.0
+            dt = min(dt, 0.05)
+
+            intents = input_router.poll(game.state)
+
+            running = True
+            for intent in intents:
+                if not game.handle_intent(intent):
+                    running = False
+
+            if not running:
+                break
+
+            game.update(dt, input_router.virtual_keys, input_router.frame_events)
+            renderer.draw(game, input_router.touch_mode, input_router.virtual_keys)
+
+            await asyncio.sleep(0)
+
     except Exception as exc:  # noqa: BLE001
         tb = traceback.format_exc().splitlines()
         screen.fill((60, 10, 10))

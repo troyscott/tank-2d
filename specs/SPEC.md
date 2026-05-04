@@ -125,7 +125,7 @@ If no solution (out of range), pick max range angle and let the player escape.
 
 ## 7. Audio
 
-The game features 4 distinct, synthetic retro 8-bit sounds (blue fire, blue impact, red fire, red impact) to provide clear, distinguishable feedback without confusion between firing and impact.
+The game features 4 distinct, .wav/.ogg sample-based retro 8-bit sounds (blue fire, blue impact, red fire, red impact) to provide clear, distinguishable feedback without confusion between firing and impact.
 
 **Hybrid Cross-Platform Architecture**:
 Pygame's default `pygame.mixer` suffers from noticeable audio buffering latency on certain OS layers (e.g. macOS CoreAudio). To achieve sub-millisecond, zero-latency audio sync, the `AudioSystem` uses OS-specific native backends:
@@ -180,7 +180,6 @@ python main.py            # play
 
 ```
 pygame>=2.5
-numpy>=1.26      # SFX synthesis only
 pytest>=8.0      # dev only
 ```
 

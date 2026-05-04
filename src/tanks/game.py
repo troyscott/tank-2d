@@ -163,9 +163,9 @@ class Game:
         menu_r = pygame.Rect(C.SCREEN_W // 2 - 200, C.SCREEN_H // 2, 400, 80)
         
         if self.state == STATE_MENU:
-            if menu_1.collidepoint(x, y): self._start_match(ai.DIFFICULTY_EASY)
-            elif menu_2.collidepoint(x, y): self._start_match(ai.DIFFICULTY_MEDIUM)
-            elif menu_3.collidepoint(x, y): self._start_match(ai.DIFFICULTY_HARD)
+            if menu_1.collidepoint(x, y): self._start_match("easy")
+            elif menu_2.collidepoint(x, y): self._start_match("medium")
+            elif menu_3.collidepoint(x, y): self._start_match("hard")
             elif menu_m.collidepoint(x, y): self.audio.toggle()
         elif self.state == STATE_ROUND_OVER:
             if menu_r.collidepoint(x, y): self._start_round()
@@ -419,6 +419,25 @@ class Game:
         self.screen.blit(self.game_surface, (int(dx), int(dy)))
         pygame.display.flip()
 
+    def _draw_text_with_shadow(
+        self,
+        surface: pygame.Surface,
+        font: pygame.font.Font,
+        text: str,
+        color: tuple[int, int, int],
+        pos: tuple[int, int],
+        anchor: str = "topleft",
+        offset: tuple[int, int] = (2, 2)
+    ) -> None:
+        surf = font.render(text, True, color)
+        shadow = font.render(text, True, (0, 0, 0))
+        rect = surf.get_rect(**{anchor: pos})
+        shadow_rect = rect.copy()
+        shadow_rect.x += offset[0]
+        shadow_rect.y += offset[1]
+        surface.blit(shadow, shadow_rect)
+        surface.blit(surf, rect)
+
     def _render_touch_ui(self, surface: pygame.Surface) -> None:
         if not self.touch_mode:
             return
@@ -451,35 +470,11 @@ class Game:
 
         # Helper to draw text with a drop shadow
         def draw_text(font, text, color, center_pos, shadow_offset=(2, 2)):
-            surf = font.render(text, True, color)
-            shadow = font.render(text, True, (0, 0, 0))
-            rect = surf.get_rect(center=center_pos)
-            shadow_rect = rect.copy()
-            shadow_rect.x += shadow_offset[0]
-            shadow_rect.y += shadow_offset[1]
-            surface.blit(shadow, shadow_rect)
-            surface.blit(surf, rect)
+            self._draw_text_with_shadow(surface, font, text, color, center_pos, anchor="center", offset=shadow_offset)
 
         def draw_menu_item(key_text, label_text, color, y_pos):
-            # Key right-aligned at center - 15
-            k_surf = self.menu_font.render(key_text, True, color)
-            k_shadow = self.menu_font.render(key_text, True, (0, 0, 0))
-            k_rect = k_surf.get_rect(topright=(C.SCREEN_W // 2 - 15, y_pos))
-            k_sh_rect = k_rect.copy()
-            k_sh_rect.x += 2
-            k_sh_rect.y += 2
-            surface.blit(k_shadow, k_sh_rect)
-            surface.blit(k_surf, k_rect)
-            
-            # Label left-aligned at center + 15
-            l_surf = self.menu_font.render(label_text, True, color)
-            l_shadow = self.menu_font.render(label_text, True, (0, 0, 0))
-            l_rect = l_surf.get_rect(topleft=(C.SCREEN_W // 2 + 15, y_pos))
-            l_sh_rect = l_rect.copy()
-            l_sh_rect.x += 2
-            l_sh_rect.y += 2
-            surface.blit(l_shadow, l_sh_rect)
-            surface.blit(l_surf, l_rect)
+            self._draw_text_with_shadow(surface, self.menu_font, key_text, color, (C.SCREEN_W // 2 - 15, y_pos), anchor="topright")
+            self._draw_text_with_shadow(surface, self.menu_font, label_text, color, (C.SCREEN_W // 2 + 15, y_pos), anchor="topleft")
 
         draw_text(self.title_font, "TANK", C.HUD_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 - 80), (4, 4))
         draw_text(self.menu_font, "best-of-5 artillery duel", C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 - 30))
@@ -517,38 +512,18 @@ class Game:
             left = ""
             color = C.HUD_COLOR
         if left:
-            # draw drop shadow
-            shadow = self.font.render(left, True, (0, 0, 0))
-            surface.blit(shadow, (12, 10))
-            surf = self.font.render(left, True, color)
-            surface.blit(surf, (10, 8))
+            self._draw_text_with_shadow(surface, self.font, left, color, (10, 8), anchor="topleft")
 
         # Center: score (best of ROUNDS_TO_WIN * 2 - 1)
         score_str = (
             f"{self.player_score}  -  {self.ai_score}    "
             f"[{self.difficulty}]"
         )
-        score_surf = self.font.render(score_str, True, C.HUD_COLOR)
-        score_shadow = self.font.render(score_str, True, (0, 0, 0))
-        score_rect = score_surf.get_rect()
-        score_rect.midtop = (C.SCREEN_W // 2, 8)
-        shadow_rect = score_rect.copy()
-        shadow_rect.x += 2
-        shadow_rect.y += 2
-        surface.blit(score_shadow, shadow_rect)
-        surface.blit(score_surf, score_rect)
+        self._draw_text_with_shadow(surface, self.font, score_str, C.HUD_COLOR, (C.SCREEN_W // 2, 8), anchor="midtop")
 
         # Right: wind
         wind_str = self._wind_string()
-        wind_surf = self.font.render(wind_str, True, C.HUD_COLOR)
-        wind_shadow = self.font.render(wind_str, True, (0, 0, 0))
-        wind_rect = wind_surf.get_rect()
-        wind_rect.topright = (C.SCREEN_W - 10, 8)
-        shadow_rect = wind_rect.copy()
-        shadow_rect.x += 2
-        shadow_rect.y += 2
-        surface.blit(wind_shadow, shadow_rect)
-        surface.blit(wind_surf, wind_rect)
+        self._draw_text_with_shadow(surface, self.font, wind_str, C.HUD_COLOR, (C.SCREEN_W - 10, 8), anchor="topright")
 
         # Player HP Bar (Top Left, below text)
         p_frac = self.player.hp / C.TANK_HP
@@ -599,20 +574,5 @@ class Game:
         overlay.fill((0, 0, 0, 150))
         surface.blit(overlay, (0, 0))
         
-        surf = self.big_font.render(msg, True, C.ROUND_OVER_COLOR)
-        shadow = self.big_font.render(msg, True, (0, 0, 0))
-        rect = surf.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 - 18))
-        shadow_rect = rect.copy()
-        shadow_rect.x += 3
-        shadow_rect.y += 3
-        surface.blit(shadow, shadow_rect)
-        surface.blit(surf, rect)
-        
-        sub_surf = self.font.render(sub, True, C.HUD_DIM_COLOR)
-        sub_shadow = self.font.render(sub, True, (0, 0, 0))
-        sub_rect = sub_surf.get_rect(center=(C.SCREEN_W // 2, C.SCREEN_H // 2 + 18))
-        sub_shadow_rect = sub_rect.copy()
-        sub_shadow_rect.x += 2
-        sub_shadow_rect.y += 2
-        surface.blit(sub_shadow, sub_shadow_rect)
-        surface.blit(sub_surf, sub_rect)
+        self._draw_text_with_shadow(surface, self.big_font, msg, C.ROUND_OVER_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 - 18), anchor="center", offset=(3, 3))
+        self._draw_text_with_shadow(surface, self.font, sub, C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 + 18), anchor="center")

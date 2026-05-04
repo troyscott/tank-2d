@@ -112,10 +112,6 @@ class AudioSystem:
 
     def _init_mixer(self) -> None:
         if sys.platform == 'emscripten':
-            try:
-                pygame.mixer.SoundPatch()
-            except Exception:
-                pass
             backend = PygameAudioBackend()
         elif sys.platform == 'darwin':
             backend = MacAudioBackend()

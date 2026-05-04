@@ -28,7 +28,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install build deps
-        run: pip install pygbag numpy pygame
+        run: pip install pygbag pygame
 
       - name: Build web bundle
         run: python -m pygbag --build --width 1024 --height 640 --title "Tank Game" main.py

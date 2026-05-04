@@ -16,6 +16,15 @@ class Particle:
     shrink: bool = True
     gravity: float = 0.0
 
+import functools
+
+@functools.lru_cache(maxsize=1024)
+def _get_glow_surface(radius: int, r: int, g: int, b: int, alpha: int) -> pygame.Surface:
+    size = radius * 2 + 2
+    temp = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(temp, (r, g, b, alpha), (size//2, size//2), radius)
+    return temp
+
 class ParticleSystem:
     def __init__(self):
         self.particles: list[Particle] = []
@@ -36,22 +45,16 @@ class ParticleSystem:
 
     def render(self, surface: pygame.Surface, additive: bool = False):
         if additive:
-            # For additive blending, we create a temporary surface
-            # but drawing lots of circles on it might be slow if we do it per particle.
-            # Pygame can do additive blending if we blit a surface with BLEND_RGBA_ADD.
             for p in self.particles:
                 alpha = max(0, int(255 * (p.life / p.max_life)))
-                r = p.radius * (p.life / p.max_life if p.shrink else 1.0)
-                if r <= 0.5:
+                r_val = p.radius * (p.life / p.max_life if p.shrink else 1.0)
+                if r_val <= 0.5:
                     continue
                 
-                # To do glowing particles properly in Pygame without killing framerate:
-                # We draw a circle on a small temp surface and blit it.
-                size = int(r * 2) + 2
-                temp = pygame.Surface((size, size), pygame.SRCALPHA)
-                color_with_alpha = (p.color[0], p.color[1], p.color[2], alpha)
-                pygame.draw.circle(temp, color_with_alpha, (size//2, size//2), r)
-                surface.blit(temp, (int(p.x - size//2), int(p.y - size//2)), special_flags=pygame.BLEND_RGBA_ADD)
+                # Use cached surface to avoid allocation per frame
+                glow = _get_glow_surface(int(r_val), p.color[0], p.color[1], p.color[2], alpha)
+                size = int(r_val) * 2 + 2
+                surface.blit(glow, (int(p.x - size//2), int(p.y - size//2)), special_flags=pygame.BLEND_RGBA_ADD)
         else:
             for p in self.particles:
                 r = p.radius * (p.life / p.max_life if p.shrink else 1.0)

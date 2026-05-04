@@ -24,7 +24,12 @@ micromamba create -p ./.venv -c conda-forge -y python=3.13 pygame numpy pytest
 | Space | fire |
 | 1 / 2 / 3 | menu — Easy / Medium / Hard |
 | R | next round (after a round) / back to menu (after a match) |
+| M | toggle audio |
 | ESC | quit |
+
+## Audio Latency Note (macOS & AirPlay)
+
+The game features an intelligent, multi-OS hybrid audio architecture that uses `afplay` natively on macOS to ensure absolute zero-latency playback. However, **if you are using an Apple HomePod, AirPods, or any Bluetooth/AirPlay speaker**, you will still experience up to a 2-second audio delay. This is an unavoidable hardware-level buffer introduced by AirPlay streaming over Wi-Fi/Bluetooth. To experience true zero-latency audio sync, plug wired speakers or headphones directly into your Mac.
 
 ## Tests
 

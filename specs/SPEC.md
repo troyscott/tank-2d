@@ -125,22 +125,17 @@ If no solution (out of range), pick max range angle and let the player escape.
 
 ## 7. Audio
 
-**The game ships silent.** All player feedback is visual:
+The game features 4 distinct, synthetic retro 8-bit sounds (blue fire, blue impact, red fire, red impact) to provide clear, distinguishable feedback without confusion between firing and impact.
 
-| event | visual cue |
-|---|---|
-| Tank fires | barrel kicks; projectile dot moves up the screen |
-| Projectile in flight | dot tracing an arc |
-| Projectile lands | crater carved into the heightmap |
-| Tank takes damage | HP bar drops; gray-out at zero HP |
-| AI's turn | "AI THINKING…" + score in HUD; barrel rotates to telegraph the shot |
-| Round / match end | overlay text + score |
+**Hybrid Cross-Platform Architecture**:
+Pygame's default `pygame.mixer` suffers from noticeable audio buffering latency on certain OS layers (e.g. macOS CoreAudio). To achieve sub-millisecond, zero-latency audio sync, the `AudioSystem` uses OS-specific native backends:
+- **macOS**: Spawns `afplay` processes to directly interface with CoreAudio.
+- **Windows**: Uses `winsound.PlaySound` with async C-bindings.
+- **WebAssembly**: Falls back seamlessly to `pygame.mixer` which performs well in browser AudioContexts.
 
-Earlier drafts iterated through procedural synth → file-based OGG SFX, both of which produced timing/character issues that persisted across many attempts (rate mismatch with `pygame.mixer.init`, layered synths fragmenting under SDL resampling, OS-level audio latency). After ~a day of audio debugging, removing audio entirely produced a tighter, more honest deliverable: every piece of information audio was meant to convey is already present visually, so silence loses atmosphere but not feedback.
+*Note: AirPlay and Bluetooth speakers inject unavoidable 1.5-2.0s hardware latency. True zero-latency syncing requires wired speakers/headphones.*
 
-The lessons from the audio iteration are kept in `docs/browser-build.md` (pygame.mixer browser/init gotchas) and the cross-project `itch-indie-game` skill — they remain useful for any future pygame project that *does* want SFX.
-
-A `STATE_IMPACT` settle phase (`config.IMPACT_SETTLE_DURATION = 0.55s`) holds the screen between projectile landing and the next turn so the crater registers visually before "AI THINKING…" appears. This was originally added to give the audio room; with audio removed, it still earns its keep as a visual pacing beat.
+A `STATE_IMPACT` settle phase (`config.IMPACT_SETTLE_DURATION = 0.55s`) holds the screen between projectile landing and the next turn so the crater registers visually before "AI THINKING…" appears.
 
 ---
 

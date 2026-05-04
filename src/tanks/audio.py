@@ -1,16 +1,97 @@
 import pygame
 import os
+import sys
+from typing import Protocol
+
+class AudioBackend(Protocol):
+    def init(self) -> bool:
+        ...
+    def play(self, name: str) -> None:
+        ...
+
+class PygameAudioBackend:
+    def __init__(self):
+        self.sounds: dict[str, pygame.mixer.Sound] = {}
+
+    def init(self) -> bool:
+        try:
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+            # Load distinct sounds (prefer .ogg for Pygame/Pygbag)
+            for name in ["fire_blue", "fire_red", "impact_blue", "impact_red"]:
+                path = os.path.join("assets", f"{name}.ogg")
+                if os.path.exists(path):
+                    self.sounds[name] = pygame.mixer.Sound(path)
+            print("PygameAudioBackend initialized successfully.")
+            return True
+        except Exception as e:
+            print(f"Pygame audio init failed: {e}")
+            return False
+
+    def play(self, name: str) -> None:
+        if name in self.sounds:
+            self.sounds[name].play()
+
+class MacAudioBackend:
+    def __init__(self):
+        self.paths: dict[str, str] = {}
+
+    def init(self) -> bool:
+        import shutil
+        if not shutil.which("afplay"):
+            return False
+            
+        for name in ["fire_blue", "fire_red", "impact_blue", "impact_red"]:
+            path = os.path.join("assets", f"{name}.wav")
+            if os.path.exists(path):
+                self.paths[name] = path
+        print("MacAudioBackend initialized successfully.")
+        return True
+
+    def play(self, name: str) -> None:
+        if name in self.paths:
+            import subprocess
+            subprocess.Popen(
+                ["afplay", self.paths[name]], 
+                stdout=subprocess.DEVNULL, 
+                stderr=subprocess.DEVNULL
+            )
+
+class WindowsAudioBackend:
+    def __init__(self):
+        self.paths: dict[str, str] = {}
+        self.winsound = None
+        
+    def init(self) -> bool:
+        try:
+            import winsound
+            self.winsound = winsound
+        except ImportError:
+            return False
+            
+        for name in ["fire_blue", "fire_red", "impact_blue", "impact_red"]:
+            path = os.path.join("assets", f"{name}.wav")
+            if os.path.exists(path):
+                self.paths[name] = path
+        print("WindowsAudioBackend initialized successfully.")
+        return True
+
+    def play(self, name: str) -> None:
+        if name in self.paths and self.winsound:
+            self.winsound.PlaySound(
+                self.paths[name], 
+                self.winsound.SND_FILENAME | self.winsound.SND_ASYNC
+            )
 
 class AudioSystem:
     """
-    Deferred audio system designed to bypass the browser AudioContext lock.
-    Initialization and sound loading only occur upon the first play() call,
-    which is guaranteed to happen after a user gesture.
+    Deferred audio system designed to bypass the browser AudioContext lock,
+    while dynamically selecting the most optimal, lowest-latency backend available
+    for the current operating system.
     """
     def __init__(self):
         self.enabled = False
         self.initialized = False
-        self.sounds: dict[str, pygame.mixer.Sound] = {}
+        self.backend: AudioBackend | None = None
 
     def toggle(self) -> None:
         self.enabled = not self.enabled
@@ -26,33 +107,35 @@ class AudioSystem:
         if not self.initialized:
             self._init_mixer()
 
-        if name in self.sounds:
-            self.sounds[name].play()
+        if self.backend:
+            self.backend.play(name)
 
     def _init_mixer(self) -> None:
-        import sys
         if sys.platform == 'emscripten':
             try:
                 pygame.mixer.SoundPatch()
             except Exception:
                 pass
-
-        try:
-            # Setting a low buffer (512 instead of the default which can be 4096+)
-            # is critical for preventing audio latency / out-of-sync sound effects.
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+            backend = PygameAudioBackend()
+        elif sys.platform == 'darwin':
+            backend = MacAudioBackend()
+        elif sys.platform == 'win32':
+            backend = WindowsAudioBackend()
+        else:
+            backend = PygameAudioBackend()
+            
+        if backend.init():
+            self.backend = backend
             self.initialized = True
-            
-            # Load sounds (using .ogg which is heavily preferred by pygame and pygbag)
-            fire_path = os.path.join("assets", "fire.ogg")
-            exp_path = os.path.join("assets", "explosion.ogg")
-            
-            if os.path.exists(fire_path):
-                self.sounds["fire"] = pygame.mixer.Sound(fire_path)
-            if os.path.exists(exp_path):
-                self.sounds["explosion"] = pygame.mixer.Sound(exp_path)
-                
-            print("AudioSystem initialized successfully.")
-        except Exception as e:
-            print(f"Failed to initialize audio: {e}")
-            self.enabled = False # disable if it fails
+        else:
+            # Fallback to Pygame if native backend failed (e.g. afplay not found)
+            if not isinstance(backend, PygameAudioBackend):
+                print(f"Native backend {backend.__class__.__name__} failed, falling back to PygameAudioBackend")
+                fallback = PygameAudioBackend()
+                if fallback.init():
+                    self.backend = fallback
+                    self.initialized = True
+                else:
+                    self.enabled = False
+            else:
+                self.enabled = False

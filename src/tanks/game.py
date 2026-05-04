@@ -222,12 +222,18 @@ class Game:
         self.flying = Projectile.fired_from(
             tip_x, tip_y, tank.angle_deg, tank.power, tank.facing
         )
-        self.audio.play("fire")
+        if tank is self.player:
+            self.audio.play("fire_blue")
+        else:
+            self.audio.play("fire_red")
 
     def _on_impact(self, x: float, y: float) -> None:
         self.terrain.apply_crater(int(x), y, C.EXPLOSION_RADIUS)
         self.particles.spawn_explosion(x, y)
-        self.audio.play("explosion")
+        if self.current_tank is self.player:
+            self.audio.play("impact_blue")
+        else:
+            self.audio.play("impact_red")
         self.shake_timer = 0.5
         self.shake_amount = 15.0
         impact = (x, y)
@@ -367,21 +373,41 @@ class Game:
             surface.blit(shadow, shadow_rect)
             surface.blit(surf, rect)
 
+        def draw_menu_item(key_text, label_text, color, y_pos):
+            # Key right-aligned at center - 15
+            k_surf = self.menu_font.render(key_text, True, color)
+            k_shadow = self.menu_font.render(key_text, True, (0, 0, 0))
+            k_rect = k_surf.get_rect(topright=(C.SCREEN_W // 2 - 15, y_pos))
+            k_sh_rect = k_rect.copy()
+            k_sh_rect.x += 2
+            k_sh_rect.y += 2
+            surface.blit(k_shadow, k_sh_rect)
+            surface.blit(k_surf, k_rect)
+            
+            # Label left-aligned at center + 15
+            l_surf = self.menu_font.render(label_text, True, color)
+            l_shadow = self.menu_font.render(label_text, True, (0, 0, 0))
+            l_rect = l_surf.get_rect(topleft=(C.SCREEN_W // 2 + 15, y_pos))
+            l_sh_rect = l_rect.copy()
+            l_sh_rect.x += 2
+            l_sh_rect.y += 2
+            surface.blit(l_shadow, l_sh_rect)
+            surface.blit(l_surf, l_rect)
+
         draw_text(self.title_font, "TANK", C.HUD_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 - 80), (4, 4))
         draw_text(self.menu_font, "best-of-5 artillery duel", C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 - 30))
 
-        for i, (label, color) in enumerate(
+        for i, (key_val, label, color) in enumerate(
             [
-                ("1   EASY", C.HUD_COLOR),
-                ("2   MEDIUM", C.HUD_COLOR),
-                ("3   HARD", C.HUD_COLOR),
+                ("1", "EASY", C.HUD_COLOR),
+                ("2", "MEDIUM", C.HUD_COLOR),
+                ("3", "HARD", C.HUD_COLOR),
             ]
         ):
-            draw_text(self.menu_font, label, color, (C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + i * 32))
+            draw_menu_item(key_val, label, color, C.SCREEN_H // 2 + 20 + i * 32)
 
         sound_state = "ON" if self.audio.enabled else "OFF"
-        sound_label = f"M   SOUND ({sound_state})"
-        draw_text(self.menu_font, sound_label, C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H // 2 + 20 + 3 * 32 + 10))
+        draw_menu_item("M", f"SOUND ({sound_state})", C.HUD_DIM_COLOR, C.SCREEN_H // 2 + 20 + 3 * 32 + 10)
 
         draw_text(self.font, "ESC quits", C.HUD_DIM_COLOR, (C.SCREEN_W // 2, C.SCREEN_H - 40))
 

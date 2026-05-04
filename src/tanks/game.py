@@ -112,6 +112,10 @@ class Game:
         self._impact_dying = False
         self.running = True
         
+        self.touch_mode = False
+        self.active_touches: dict[int, tuple[float, float]] = {}
+        self.virtual_keys: dict[str, bool] = {}
+        
         self.particles = ParticleSystem()
         self.audio = AudioSystem()
         self.shake_timer = 0.0
@@ -151,12 +155,30 @@ class Game:
             await asyncio.sleep(0)
         pygame.quit()
 
+    def _handle_touch_menu(self, x: float, y: float) -> None:
+        menu_1 = pygame.Rect(C.SCREEN_W // 2 - 100, C.SCREEN_H // 2 + 10, 200, 30)
+        menu_2 = pygame.Rect(C.SCREEN_W // 2 - 100, C.SCREEN_H // 2 + 42, 200, 30)
+        menu_3 = pygame.Rect(C.SCREEN_W // 2 - 100, C.SCREEN_H // 2 + 74, 200, 30)
+        menu_m = pygame.Rect(C.SCREEN_W // 2 - 100, C.SCREEN_H // 2 + 116, 200, 30)
+        menu_r = pygame.Rect(C.SCREEN_W // 2 - 200, C.SCREEN_H // 2, 400, 80)
+        
+        if self.state == STATE_MENU:
+            if menu_1.collidepoint(x, y): self._start_match(ai.DIFFICULTY_EASY)
+            elif menu_2.collidepoint(x, y): self._start_match(ai.DIFFICULTY_MEDIUM)
+            elif menu_3.collidepoint(x, y): self._start_match(ai.DIFFICULTY_HARD)
+            elif menu_m.collidepoint(x, y): self.audio.toggle()
+        elif self.state == STATE_ROUND_OVER:
+            if menu_r.collidepoint(x, y): self._start_round()
+        elif self.state == STATE_MATCH_END:
+            if menu_r.collidepoint(x, y): self.state = STATE_MENU
+
     def _handle_events(self) -> None:
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
+                self.touch_mode = False
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
                 elif event.key == pygame.K_m:
@@ -168,10 +190,48 @@ class Game:
                         self._start_round()
                     elif self.state == STATE_MATCH_END:
                         self.state = STATE_MENU
+            elif event.type == pygame.FINGERDOWN:
+                self.touch_mode = True
+                tx, ty = event.x * C.SCREEN_W, event.y * C.SCREEN_H
+                self.active_touches[event.finger_id] = (tx, ty)
+                self._handle_touch_menu(tx, ty)
+            elif event.type == pygame.FINGERMOTION:
+                if event.finger_id in self.active_touches:
+                    self.active_touches[event.finger_id] = (event.x * C.SCREEN_W, event.y * C.SCREEN_H)
+            elif event.type == pygame.FINGERUP:
+                self.active_touches.pop(event.finger_id, None)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                self.touch_mode = True
+                tx, ty = pygame.mouse.get_pos()
+                self.active_touches[-1] = (tx, ty)
+                self._handle_touch_menu(tx, ty)
+            elif event.type == pygame.MOUSEMOTION:
+                if -1 in self.active_touches:
+                    self.active_touches[-1] = pygame.mouse.get_pos()
+            elif event.type == pygame.MOUSEBUTTONUP:
+                self.active_touches.pop(-1, None)
         self._frame_events = events
+
+    def _compute_virtual_keys(self) -> None:
+        self.virtual_keys = {"LEFT": False, "RIGHT": False, "UP": False, "DOWN": False, "SPACE": False}
+        btn_left = pygame.Rect(20, C.SCREEN_H - 100, 80, 80)
+        btn_right = pygame.Rect(120, C.SCREEN_H - 100, 80, 80)
+        btn_down = pygame.Rect(C.SCREEN_W - 300, C.SCREEN_H - 100, 80, 80)
+        btn_up = pygame.Rect(C.SCREEN_W - 200, C.SCREEN_H - 100, 80, 80)
+        btn_fire = pygame.Rect(C.SCREEN_W - 100, C.SCREEN_H - 100, 80, 80)
+
+        for x, y in self.active_touches.values():
+            if self.state == STATE_PLAYER_TURN:
+                if btn_left.collidepoint(x, y): self.virtual_keys["LEFT"] = True
+                if btn_right.collidepoint(x, y): self.virtual_keys["RIGHT"] = True
+                if btn_down.collidepoint(x, y): self.virtual_keys["DOWN"] = True
+                if btn_up.collidepoint(x, y): self.virtual_keys["UP"] = True
+                if btn_fire.collidepoint(x, y): self.virtual_keys["SPACE"] = True
 
     def _update(self, dt: float) -> None:
         self.particles.update(dt)
+        self._compute_virtual_keys()
+        
         if self.shake_timer > 0:
             self.shake_timer -= dt
             self.shake_amount *= 0.9
@@ -185,7 +245,7 @@ class Game:
         if self.state in (STATE_PLAYER_TURN, STATE_AI_TURN):
             ctrl = self._controller_for(self.current_tank)
             fired = ctrl.tick(
-                self.current_tank, self._world(), dt, self._frame_events
+                self.current_tank, self._world(), dt, self._frame_events, self.virtual_keys
             )
             if fired:
                 self._fire(self.current_tank)
@@ -343,6 +403,9 @@ class Game:
         self.particles.render(self.game_surface, additive=True)
             
         self._render_hud(self.game_surface)
+        if self.state in (STATE_PLAYER_TURN, STATE_AI_TURN, STATE_FLIGHT):
+            self._render_touch_ui(self.game_surface)
+            
         if self.state == STATE_ROUND_OVER:
             self._render_round_over(self.game_surface)
         elif self.state == STATE_MATCH_END:
@@ -355,6 +418,30 @@ class Game:
             
         self.screen.blit(self.game_surface, (int(dx), int(dy)))
         pygame.display.flip()
+
+    def _render_touch_ui(self, surface: pygame.Surface) -> None:
+        if not self.touch_mode:
+            return
+            
+        def draw_btn(rect, text, active):
+            color = (255, 255, 255, 100) if active else (255, 255, 255, 30)
+            btn_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(btn_surf, color, btn_surf.get_rect(), border_radius=10)
+            pygame.draw.rect(btn_surf, (255, 255, 255, 150), btn_surf.get_rect(), 2, border_radius=10)
+            surface.blit(btn_surf, rect.topleft)
+            
+            txt_surf = self.font.render(text, True, (255, 255, 255))
+            txt_rect = txt_surf.get_rect(center=rect.center)
+            surface.blit(txt_surf, txt_rect)
+
+        # Aim (Bottom Left)
+        draw_btn(pygame.Rect(20, C.SCREEN_H - 100, 80, 80), "<", self.virtual_keys.get("LEFT", False))
+        draw_btn(pygame.Rect(120, C.SCREEN_H - 100, 80, 80), ">", self.virtual_keys.get("RIGHT", False))
+        
+        # Power & Fire (Bottom Right)
+        draw_btn(pygame.Rect(C.SCREEN_W - 300, C.SCREEN_H - 100, 80, 80), "P-", self.virtual_keys.get("DOWN", False))
+        draw_btn(pygame.Rect(C.SCREEN_W - 200, C.SCREEN_H - 100, 80, 80), "P+", self.virtual_keys.get("UP", False))
+        draw_btn(pygame.Rect(C.SCREEN_W - 100, C.SCREEN_H - 100, 80, 80), "FIRE", self.virtual_keys.get("SPACE", False))
 
     def _render_menu(self, surface: pygame.Surface) -> None:
         # Draw a semi-transparent dark overlay to dim the background

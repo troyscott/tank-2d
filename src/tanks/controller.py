@@ -45,33 +45,42 @@ class Controller(ABC):
         world: World,
         dt: float,
         events: list[pygame.event.Event],
+        virtual_keys: dict[str, bool],
     ) -> bool:
         """Per-frame update. Returns True if the tank fires this tick."""
         ...
 
 
 class PlayerController(Controller):
-    def tick(self, tank, world, dt, events):
+    def tick(self, tank, world, dt, events, virtual_keys):
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
+        
+        left = keys[pygame.K_LEFT] or virtual_keys.get("LEFT", False)
+        right = keys[pygame.K_RIGHT] or virtual_keys.get("RIGHT", False)
+        up = keys[pygame.K_UP] or virtual_keys.get("UP", False)
+        down = keys[pygame.K_DOWN] or virtual_keys.get("DOWN", False)
+        fire = keys[pygame.K_SPACE] or virtual_keys.get("SPACE", False)
+        
+        if left:
             tank.angle_deg = _clamp(
                 tank.angle_deg + C.ANGLE_RATE_DEG_PER_SEC * dt, C.ANGLE_MIN, C.ANGLE_MAX
             )
-        if keys[pygame.K_RIGHT]:
+        if right:
             tank.angle_deg = _clamp(
                 tank.angle_deg - C.ANGLE_RATE_DEG_PER_SEC * dt, C.ANGLE_MIN, C.ANGLE_MAX
             )
-        if keys[pygame.K_UP]:
+
+        if up:
             tank.power = _clamp(
                 tank.power + C.POWER_RATE_PER_SEC * dt, C.POWER_MIN, C.POWER_MAX
             )
-        if keys[pygame.K_DOWN]:
+        if down:
             tank.power = _clamp(
                 tank.power - C.POWER_RATE_PER_SEC * dt, C.POWER_MIN, C.POWER_MAX
             )
-        for ev in events:
-            if ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
-                return True
+
+        if fire:
+            return True
         return False
 
 
@@ -92,8 +101,10 @@ class AIController(Controller):
         self._target_power: float | None = None
         self._timer = 0.0
         self._fired = False
+        self.turn_state = "THINKING"
+        self.turn_delay_timer = 0.0
 
-    def begin_turn(self, tank, world):
+    def begin_turn(self, tank: "Tank", world: World) -> None:
         self._start_angle = tank.angle_deg
         self._start_power = tank.power
         
@@ -113,27 +124,44 @@ class AIController(Controller):
             )
             self._target_angle = angle_deg
             self._target_power = power
-        self._timer = 0.0
+        
+        self.turn_state = "THINKING"
+        self.turn_delay_timer = 1.0
         self._fired = False
 
-    def tick(self, tank, world, dt, events):
-        self._timer += dt
-        
-        # Smoothly interpolate barrel and power over the turn delay so the player
-        # can see what the AI is aiming at without a confusing pause before the shot.
-        progress = min(1.0, self._timer / self.delay)
-        
-        if self._start_angle is not None and self._target_angle is not None:
-            tank.angle_deg = self._start_angle + (self._target_angle - self._start_angle) * progress
-        if self._start_power is not None and self._target_power is not None:
-            tank.power = self._start_power + (self._target_power - self._start_power) * progress
-            
-        if not self._fired and self._timer >= self.delay:
-            self._fired = True
+    def tick(self, tank: "Tank", world: World, dt: float, events: list[pygame.event.Event], virtual_keys: dict[str, bool]) -> bool:
+        if self._start_angle is None or self._target_angle is None or self._target_power is None:
+            return False
+
+        if self.turn_state == "THINKING":
+            self.turn_delay_timer -= dt
+            if self.turn_delay_timer <= 0:
+                self.turn_state = "AIMING"
+            return False
+
+        if self.turn_state == "AIMING":
+            # Smoothly interpolate angle
+            angle_diff = self._target_angle - tank.angle_deg
+            if abs(angle_diff) > 0.5:
+                # Move barrel at a fixed rate (e.g. 45 degrees per sec)
+                move_dir = 1 if angle_diff > 0 else -1
+                move_amount = 45.0 * dt
+                if abs(angle_diff) < move_amount:
+                    tank.angle_deg = self._target_angle
+                else:
+                    tank.angle_deg += move_dir * move_amount
+                return False
+                
+            # Once angle is reached, snap power instantly and fire
+            tank.angle_deg = self._target_angle
+            tank.power = self._target_power
+            self.turn_state = "FIRING"
+            # Return true on the exact frame we snap the power and transition to firing
             return True
+            
         return False
 
-    def end_turn(self, tank, world, landing_x):
+    def end_turn(self, tank: "Tank", world: World, landing_x: float | None) -> None:
         if landing_x is None or not self.cfg.memory:
             return
         opponent = next((t for t in world.tanks if t is not tank), None)

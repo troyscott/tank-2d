@@ -1,5 +1,10 @@
 # tank
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+[![Play on itch.io](https://img.shields.io/badge/Play_on-itch.io-FA5C5C?logo=itch.io&logoColor=white)](https://fableworks.itch.io/tank-2d)
 A 2D side-view turn-based artillery duel in Python + pygame. One human vs. one AI, best-of-five, destructible terrain, per-round wind, three difficulty levels. 
 
 Featuring a vibrant cyberpunk visual overhaul with procedural particle systems, screen shake, and glowing neon artillery. The game ships silent — all feedback is visual; see `specs/SPEC.md` § 7 for the rationale.
